@@ -1,9 +1,8 @@
-//! Library entry point exposing the core command handlers.
+//! Library entry point exposing the core command handlers for `ssv`.
 
 pub mod commands;
-pub mod error;
-
 mod core;
-mod storage;
+pub mod error;
+mod ssh_paths;
 
-pub use commands::{add, delete, list};
+pub use commands::{generate, list, remove};

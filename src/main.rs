@@ -1,13 +1,10 @@
 use clap::{Parser, Subcommand};
-use rs_cli_tmpl::commands;
-use rs_cli_tmpl::error::AppError;
+use ssv::commands;
+use ssv::error::AppError;
 
 #[derive(Parser)]
-#[command(name = "rs-cli-tmpl")]
-#[command(
-    about = "Reference architecture for building Rust CLI tools",
-    long_about = None
-)]
+#[command(name = "ssv")]
+#[command(about = "Lifecycle manager for SSH keys and configuration", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -15,23 +12,28 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Add a new item to the template storage backend
-    #[clap(alias = "a")]
-    Add {
-        /// Identifier for the item
-        id: String,
-        /// Content to persist with the item
-        #[clap(short, long)]
-        content: String,
+    /// Generate a key pair and host configuration file
+    Generate {
+        /// Hostname to manage (e.g., github.com)
+        #[arg(long, value_name = "HOST")]
+        host: String,
+        /// Key type to generate (default: ed25519)
+        #[arg(long = "type", default_value = "ed25519", value_name = "TYPE")]
+        key_type: String,
+        /// Optional user override for SSH config
+        #[arg(long, value_name = "USER")]
+        user: Option<String>,
+        /// Optional port override for SSH config
+        #[arg(long, value_name = "PORT")]
+        port: Option<u16>,
     },
-    /// List all stored item identifiers
-    #[clap(alias = "ls")]
+    /// List managed hosts
     List,
-    /// Delete an item from storage
-    #[clap(alias = "rm")]
-    Delete {
-        /// Identifier for the item to delete
-        id: String,
+    /// Remove key pairs and configuration for a host
+    Remove {
+        /// Hostname to remove
+        #[arg(long, value_name = "HOST")]
+        host: String,
     },
 }
 
@@ -39,9 +41,11 @@ fn main() {
     let cli = Cli::parse();
 
     let result: Result<(), AppError> = match cli.command {
-        Commands::Add { id, content } => commands::add(&id, &content),
+        Commands::Generate { host, key_type, user, port } => {
+            commands::generate(&host, &key_type, user.as_deref(), port)
+        }
         Commands::List => commands::list().map(|_| ()),
-        Commands::Delete { id } => commands::delete(&id),
+        Commands::Remove { host } => commands::remove(&host),
     };
 
     if let Err(e) = result {

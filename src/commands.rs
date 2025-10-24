@@ -1,41 +1,48 @@
-use crate::core::{Execute, add_item::AddItem, delete_item::DeleteItem, list_items::ListItems};
+use crate::core::{generate_host::GenerateHost, list_hosts::ListHosts, remove_host::RemoveHost};
 use crate::error::AppError;
-use crate::storage::FilesystemStorage;
+use crate::ssh_paths::SshPaths;
 
-/// Add a new item to storage using the default filesystem backend.
-pub fn add(id: &str, content: &str) -> Result<(), AppError> {
-    let storage = FilesystemStorage::new_default()?;
-    let command = AddItem { id, content };
+/// Generate a new SSH key pair and configuration for the provided host.
+pub fn generate(
+    host: &str,
+    key_type: &str,
+    user: Option<&str>,
+    port: Option<u16>,
+) -> Result<(), AppError> {
+    let paths = SshPaths::from_env()?;
+    let command = GenerateHost { host, key_type, user, port };
+    let public_key = command.execute(&paths)?;
 
-    command.execute(&storage)?;
-    println!("✅ Added item '{id}'");
+    println!("✅ Generated SSH assets for '{host}'");
+    println!("{public_key}");
     Ok(())
 }
 
-/// List all stored item identifiers.
+/// List all managed hosts underneath ~/.ssh/conf.d.
 pub fn list() -> Result<Vec<String>, AppError> {
-    let storage = FilesystemStorage::new_default()?;
-    let command = ListItems;
-    let items = command.execute(&storage)?;
+    let paths = SshPaths::from_env()?;
+    paths.ensure_base_dirs()?;
 
-    println!("📦 Stored items:");
-    if items.is_empty() {
-        println!("(none)");
+    let command = ListHosts;
+    let hosts = command.execute(&paths)?;
+
+    if hosts.is_empty() {
+        println!("(no hosts managed yet)");
     } else {
-        for id in &items {
-            println!("- {id}");
+        for host in &hosts {
+            println!("{host}");
         }
     }
 
-    Ok(items)
+    Ok(hosts)
 }
 
-/// Delete an item from storage.
-pub fn delete(id: &str) -> Result<(), AppError> {
-    let storage = FilesystemStorage::new_default()?;
-    let command = DeleteItem { id };
+/// Remove the key pair and configuration associated with a host.
+pub fn remove(host: &str) -> Result<(), AppError> {
+    let paths = SshPaths::from_env()?;
+    let command = RemoveHost { host };
+    command.execute(&paths)?;
 
-    command.execute(&storage)?;
-    println!("🗑️  Deleted item '{id}'");
+    println!("🗑️  Removed SSH assets for '{host}'");
     Ok(())
 }
