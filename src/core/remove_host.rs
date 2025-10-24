@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::ssh_paths::SshPaths;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub(crate) struct RemoveHost<'a> {
     pub host: &'a str,
@@ -15,18 +15,11 @@ impl<'a> RemoveHost<'a> {
         let config_path = paths.host_config_path(self.host);
         let mut identity_candidates = Vec::new();
 
-        if config_path.exists()
-            && let Ok(config_contents) = fs::read_to_string(&config_path)
-        {
+        if let Ok(config_contents) = fs::read_to_string(&config_path) {
             identity_candidates.extend(self.parse_identity_files(&config_contents, paths));
         }
 
-        if config_path.exists()
-            && let Err(err) = fs::remove_file(&config_path)
-            && err.kind() != std::io::ErrorKind::NotFound
-        {
-            return Err(AppError::from(err));
-        }
+        Self::remove_if_exists(&config_path)?;
 
         if identity_candidates.is_empty() {
             identity_candidates.extend(self.guess_identity_files(paths));
@@ -34,8 +27,9 @@ impl<'a> RemoveHost<'a> {
 
         for key_path in identity_candidates {
             Self::remove_if_exists(&key_path)?;
-            let pub_path = Self::to_public_key_path(&key_path);
-            Self::remove_if_exists(&pub_path)?;
+            if let Some(pub_path) = Self::to_public_key_path(&key_path) {
+                Self::remove_if_exists(&pub_path)?;
+            }
         }
 
         Ok(())
@@ -53,7 +47,7 @@ impl<'a> RemoveHost<'a> {
                 let directive = parts.next()?;
                 if directive.eq_ignore_ascii_case("IdentityFile") {
                     let value = parts.next()?;
-                    Some(Self::expand_path(value, paths))
+                    Self::expand_path(value, paths)
                 } else {
                     None
                 }
@@ -73,7 +67,7 @@ impl<'a> RemoveHost<'a> {
                 let path = entry.path();
                 if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
                     && file_name.starts_with("id_")
-                    && file_name.ends_with(self.host)
+                    && file_name.ends_with(&format!("_{}", self.host))
                     && !file_name.ends_with(".pub")
                 {
                     candidates.push(path.clone());
@@ -84,11 +78,22 @@ impl<'a> RemoveHost<'a> {
         candidates
     }
 
-    fn expand_path(value: &str, paths: &SshPaths) -> PathBuf {
-        if let Some(stripped) = value.strip_prefix("~/") {
+    fn expand_path(value: &str, paths: &SshPaths) -> Option<PathBuf> {
+        let candidate = if let Some(stripped) = value.strip_prefix("~/") {
             paths.home().join(stripped)
-        } else {
+        } else if Path::new(value).is_absolute() {
             PathBuf::from(value)
+        } else {
+            paths.ssh_root().join(value)
+        };
+
+        let normalized_root = normalize_path(&paths.ssh_root());
+        let normalized_candidate = normalize_path(&candidate);
+
+        if normalized_candidate.starts_with(&normalized_root) {
+            Some(normalized_candidate)
+        } else {
+            None
         }
     }
 
@@ -100,13 +105,27 @@ impl<'a> RemoveHost<'a> {
         }
     }
 
-    fn to_public_key_path(private: &Path) -> PathBuf {
-        let mut file_name = private
-            .file_name()
-            .and_then(|n| n.to_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| String::from("id_ssh_key"));
-        file_name.push_str(".pub");
-        private.with_file_name(file_name)
+    fn to_public_key_path(private: &Path) -> Option<PathBuf> {
+        let mut file_name = private.file_name()?.to_os_string();
+        file_name.push(".pub");
+        Some(private.with_file_name(file_name))
     }
+}
+
+fn normalize_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+
+    normalized
 }

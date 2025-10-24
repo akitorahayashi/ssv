@@ -100,27 +100,35 @@ set -eu
 outfile=""
 keytype="stub"
 while [ "$#" -gt 0 ]; do
-  case "$1" in
+  arg="$1"
+  shift
+  case "$arg" in
     -f)
-      shift
+      if [ "$#" -eq 0 ]; then
+        echo "missing -f argument" >&2
+        exit 1
+      fi
       outfile="$1"
+      shift
       ;;
     -t)
-      shift
+      if [ "$#" -eq 0 ]; then
+        echo "missing -t argument" >&2
+        exit 1
+      fi
       keytype="$1"
+      shift
       ;;
     *)
-      shift
       ;;
   esac
-  shift || true
 done
 if [ -z "$outfile" ]; then
   echo "missing -f argument" >&2
   exit 1
 fi
-echo "PRIVATE-${keytype}" > "$outfile"
-echo "ssh-${keytype} AAAATESTKEY ${keytype}@ssv" > "${outfile}.pub"
+printf 'PRIVATE-%s\n' "$keytype" > "$outfile"
+printf 'ssh-%s AAAATESTKEY %s@ssv\n' "$keytype" "$keytype" > "${outfile}.pub"
 "#;
         fs::write(path, script).expect("Failed to create ssh-keygen stub");
         #[cfg(unix)]
