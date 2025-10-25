@@ -25,6 +25,8 @@ impl<'a> RemoveHost<'a> {
             identity_candidates.extend(self.guess_identity_files(paths));
         }
 
+        identity_candidates.retain(|p| p.starts_with(paths.ssh_root()));
+
         for key_path in identity_candidates {
             Self::remove_if_exists(&key_path)?;
             if let Some(pub_path) = Self::to_public_key_path(&key_path) {
@@ -47,6 +49,7 @@ impl<'a> RemoveHost<'a> {
                 let directive = parts.next()?;
                 if directive.eq_ignore_ascii_case("IdentityFile") {
                     let value = parts.next()?;
+                    let value = Self::unquote(value);
                     Self::expand_path(value, paths)
                 } else {
                     None
@@ -109,6 +112,10 @@ impl<'a> RemoveHost<'a> {
         let mut file_name = private.file_name()?.to_os_string();
         file_name.push(".pub");
         Some(private.with_file_name(file_name))
+    }
+
+    fn unquote(s: &str) -> &str {
+        s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
     }
 }
 
