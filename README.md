@@ -1,72 +1,43 @@
-# rs-cli-tmpl
+# ssv
 
-`rs-cli-tmpl` is a reference template for building Rust-based command line tools with a clean,
-layered architecture. It demonstrates how to separate concerns across the CLI interface,
-application commands, pure core logic, and I/O abstractions so new projects can start from a
-well-tested foundation.
+`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It replaces ad-hoc scripts with a single binary that can generate keys via `ssh-keygen`, list managed hosts, and clean up credentials when they are no longer needed.
 
-## Architectural Highlights
+## Features
 
-- **Three-tier structure** &mdash; `src/main.rs` handles CLI parsing, `src/commands.rs` wires
-  dependencies and user messaging, and `src/core/` keeps business rules testable via the
-  `Execute` trait.
-- **I/O abstraction** &mdash; `src/storage.rs` defines a `Storage` trait and a `FilesystemStorage`
-  implementation rooted at `~/.config/rs-cli-tmpl`, making it easy to swap storage backends.
-- **Robust testing strategy** &mdash; unit tests live next to their modules, `src/core/test_support.rs`
-  offers a `MockStorage` for core logic tests, and the `tests/` directory provides integration
-  suites for both the library API and the CLI binary.
+- **Secure bootstrap** – every subcommand ensures `~/.ssh` and `~/.ssh/conf.d` exist with `0700` permissions before continuing.
+- **Key generation** – `ssv generate` wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
+- **Inventory awareness** – `ssv list` scans managed configs and shows the hostnames under management.
+- **Safe teardown** – `ssv remove` deletes matching configs and key pairs without erroring if files were already removed manually.
 
-The template ships with minimal sample commands (`add`, `list`, and `delete`) that show how to
-thread dependencies through each layer. Replace or extend them with your own domain logic while
-reusing the same structure.
-
-## Storage Layout
-
-The template stores items under `~/.config/rs-cli-tmpl/<id>/item.txt`. For example, after running `rs-cli-tmpl add my-item --content '...'`:
-
-```text
-~/.config/rs-cli-tmpl/
-  my-item/
-    item.txt
-```
-
-## Quick Start
+## Usage
 
 ```bash
-cargo install --path .
-# or
-cargo build --release
+# Generate keys/config for github.com
+ssv generate --host github.com --user git
+
+# List all managed hosts
+ssv list
+
+# Remove keys/config for github.com
+ssv remove --host github.com
 ```
 
-The optimized binary will be created at `target/release/rs-cli-tmpl`.
+Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `--type`, `--user`, and `--port` flags let you customise the generated configuration.
 
-## Development Commands
+## Development
 
-- `cargo build` &mdash; build a debug binary.
-- `cargo build --release` &mdash; build the optimized release binary.
-- `cargo fmt` &mdash; format code using rustfmt.
-- `cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings` &mdash; format check and lint with clippy.
-- `RUST_TEST_THREADS=1 cargo test --all-targets --all-features` &mdash; run all tests.
-- `cargo fetch --locked` &mdash; pre-fetch dependencies.
+```bash
+cargo build         # debug build
+cargo build --release
+cargo fmt
+cargo clippy --all-targets --all-features -- -D warnings
+RUST_TEST_THREADS=1 cargo test --all-targets --all-features
+```
 
-## Testing Culture
+### Testing
 
-- **Unit Tests**: Live alongside their modules inside `src/`, covering helper utilities and
-  filesystem boundaries.
-- **Core Logic Tests**: Use the mock storage in `src/core/test_support.rs` to exercise the
-  command implementations without touching the real filesystem.
-- **Integration Tests**: Located in the `tests/` directory. Separate crates cover the public
-  library API (`tests/commands_api.rs`) and CLI workflows (`tests/cli_commands.rs`,
-  `tests/cli_flow.rs`). Shared fixtures live in `tests/common/mod.rs`.
+Integration tests in `tests/` exercise the CLI and library API with a stubbed `ssh-keygen`. They rely on `serial_test` because the fixtures manipulate the `HOME` environment variable. Run the full suite with `cargo test` before committing changes.
 
-Run `cargo test` regularly&mdash;filesystem-heavy tests rely on the `serial_test` crate to avoid race
-conditions.
+## License
 
-## Adapting the Template
-
-1. Replace the sample commands in `src/core/` with your own business logic.
-2. Extend `src/commands.rs` to wire new dependencies and expose public APIs.
-3. Update the CLI definitions in `src/main.rs` to match your command surface.
-4. Refresh the integration tests and documentation to describe the new behavior.
-
-Happy hacking!
+This project is distributed under the MIT license.

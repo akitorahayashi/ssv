@@ -1,4 +1,4 @@
-//! Shared testing utilities mirroring the reference project's fixture culture.
+//! Shared testing utilities for the `ssv` CLI and library.
 
 use assert_cmd::Command;
 use std::env;
@@ -7,12 +7,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-/// Testing harness providing an isolated HOME/workspace pair for CLI and SDK exercises.
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+/// Testing harness providing an isolated HOME/workspace pair and stubbed ssh-keygen.
 #[allow(dead_code)]
 pub struct TestContext {
     root: TempDir,
     work_dir: PathBuf,
     original_home: Option<OsString>,
+    original_keygen: Option<OsString>,
+    keygen_stub: PathBuf,
 }
 
 #[allow(dead_code)]
@@ -23,12 +28,22 @@ impl TestContext {
         let work_dir = root.path().join("work");
         fs::create_dir_all(&work_dir).expect("Failed to create test work directory");
 
+        let bin_dir = root.path().join("bin");
+        fs::create_dir_all(&bin_dir).expect("Failed to create stub bin directory");
+        let keygen_stub = bin_dir.join("ssh-keygen");
+        Self::write_keygen_stub(&keygen_stub);
+
         let original_home = env::var_os("HOME");
         unsafe {
             env::set_var("HOME", root.path());
         }
 
-        Self { root, work_dir, original_home }
+        let original_keygen = env::var_os("SSV_SSH_KEYGEN_PATH");
+        unsafe {
+            env::set_var("SSV_SSH_KEYGEN_PATH", &keygen_stub);
+        }
+
+        Self { root, work_dir, original_home, original_keygen, keygen_stub }
     }
 
     /// Absolute path to the emulated `$HOME` directory.
@@ -41,53 +56,87 @@ impl TestContext {
         &self.work_dir
     }
 
-    /// Convenience helper to create additional sibling workspaces (e.g., for linking scenarios).
-    pub fn create_workspace(&self, name: &str) -> PathBuf {
-        let path = self.home().join(name);
-        fs::create_dir_all(&path).expect("Failed to create additional workspace");
-        path
-    }
-
-    /// Populate the default workspace with an item file containing the provided contents.
-    pub fn write_item_file(&self, contents: &str) {
-        let item_path = self.work_dir().join("item.txt");
-        fs::write(&item_path, contents).expect("Failed to write item file for test");
-    }
-
-    /// Create an item file in the given directory with the provided contents.
-    pub fn write_item_file_in<P: AsRef<Path>>(&self, dir: P, contents: &str) {
-        let path = dir.as_ref().join("item.txt");
-        fs::write(path, contents).expect("Failed to write item file");
-    }
-
-    /// Build a command for invoking the compiled `rs-cli-tmpl` binary within the default workspace.
+    /// Build a command for invoking the compiled `ssv` binary within the default workspace.
     pub fn cli(&self) -> Command {
         self.cli_in(self.work_dir())
     }
 
-    /// Build a command for invoking the compiled `rs-cli-tmpl` binary within a custom directory.
+    /// Build a command for invoking the compiled `ssv` binary within a custom directory.
     pub fn cli_in<P: AsRef<Path>>(&self, dir: P) -> Command {
-        let mut cmd =
-            Command::cargo_bin("rs-cli-tmpl").expect("Failed to locate rs-cli-tmpl binary");
-        cmd.current_dir(dir.as_ref()).env("HOME", self.home());
+        let mut cmd = Command::cargo_bin("ssv").expect("Failed to locate ssv binary");
+        cmd.current_dir(dir.as_ref())
+            .env("HOME", self.home())
+            .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub);
         cmd
     }
 
-    /// Return the path where the CLI stores a saved item file for the provided identifier.
-    pub fn saved_item_path(&self, id: &str) -> PathBuf {
-        self.home().join(".config").join("rs-cli-tmpl").join(id).join("item.txt")
+    /// Path to the configuration file generated for a host.
+    pub fn host_config_path(&self, host: &str) -> PathBuf {
+        self.home().join(".ssh").join("conf.d").join(format!("{host}.conf"))
     }
 
-    /// Assert that a saved item contains the provided value snippet.
-    pub fn assert_saved_item_contains(&self, id: &str, expected_snippet: &str) {
-        let item_path = self.saved_item_path(id);
-        assert!(item_path.exists(), "Expected saved item at {}", item_path.display());
-        let content = fs::read_to_string(&item_path).expect("Failed to read saved item");
+    /// Path to the private key generated for a host (defaults to ed25519).
+    pub fn private_key_path(&self, key_type: &str, host: &str) -> PathBuf {
+        self.home().join(".ssh").join(format!("id_{}_{}", key_type, host))
+    }
+
+    /// Path to the public key generated for a host (defaults to ed25519).
+    pub fn public_key_path(&self, key_type: &str, host: &str) -> PathBuf {
+        self.home().join(".ssh").join(format!("id_{}_{}.pub", key_type, host))
+    }
+
+    /// Assert that a configuration file contains the expected content snippet.
+    pub fn assert_config_contains(&self, host: &str, needle: &str) {
+        let config = fs::read_to_string(self.host_config_path(host)).expect("Config not readable");
         assert!(
-            content.contains(expected_snippet),
-            "Saved item for id `{id}` did not contain `{expected}`; content: {content}",
-            expected = expected_snippet
+            config.contains(needle),
+            "Config for {host} did not contain `{needle}`.\nContents:\n{config}"
         );
+    }
+
+    fn write_keygen_stub(path: &Path) {
+        let script = r#"#!/usr/bin/env sh
+set -eu
+outfile=""
+keytype="stub"
+while [ "$#" -gt 0 ]; do
+  arg="$1"
+  shift
+  case "$arg" in
+    -f)
+      if [ "$#" -eq 0 ]; then
+        echo "missing -f argument" >&2
+        exit 1
+      fi
+      outfile="$1"
+      shift
+      ;;
+    -t)
+      if [ "$#" -eq 0 ]; then
+        echo "missing -t argument" >&2
+        exit 1
+      fi
+      keytype="$1"
+      shift
+      ;;
+    *)
+      ;;
+  esac
+done
+if [ -z "$outfile" ]; then
+  echo "missing -f argument" >&2
+  exit 1
+fi
+printf 'PRIVATE-%s\n' "$keytype" > "$outfile"
+printf 'ssh-%s AAAATESTKEY %s@ssv\n' "$keytype" "$keytype" > "${outfile}.pub"
+"#;
+        fs::write(path, script).expect("Failed to create ssh-keygen stub");
+        #[cfg(unix)]
+        {
+            let mut perms = fs::metadata(path).expect("stub metadata").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("stub chmod");
+        }
     }
 
     /// Execute a closure after temporarily switching into the provided directory.
@@ -112,6 +161,15 @@ impl Drop for TestContext {
             },
             None => unsafe {
                 env::remove_var("HOME");
+            },
+        }
+
+        match &self.original_keygen {
+            Some(value) => unsafe {
+                env::set_var("SSV_SSH_KEYGEN_PATH", value);
+            },
+            None => unsafe {
+                env::remove_var("SSV_SSH_KEYGEN_PATH");
             },
         }
     }

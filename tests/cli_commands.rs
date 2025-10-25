@@ -3,79 +3,64 @@ mod common;
 use common::TestContext;
 use predicates::prelude::*;
 use serial_test::serial;
+use std::fs;
 
 #[test]
 #[serial]
-fn add_command_persists_item() {
+fn generate_command_provisions_assets() {
     let ctx = TestContext::new();
 
     ctx.cli()
-        .arg("add")
-        .arg("demo")
-        .arg("--content")
-        .arg("example value")
+        .args(["generate", "--host", "github.com", "--user", "git", "--port", "2222"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Added item 'demo'"));
+        .stdout(predicate::str::contains("✅ Generated SSH assets for 'github.com'"))
+        .stdout(predicate::str::contains("ssh-ed25519 AAAATESTKEY ed25519@ssv"));
 
-    ctx.assert_saved_item_contains("demo", "example value");
+    let config = ctx.host_config_path("github.com");
+    assert!(config.exists(), "Config file should be created");
+    ctx.assert_config_contains("github.com", "Host github.com");
+    ctx.assert_config_contains("github.com", "User git");
+    ctx.assert_config_contains("github.com", "Port 2222");
+
+    let private_key = ctx.private_key_path("ed25519", "github.com");
+    assert!(private_key.exists(), "Private key should be created");
+    let contents = fs::read_to_string(private_key).expect("Failed to read private key");
+    assert!(contents.contains("PRIVATE-ed25519"));
 }
 
 #[test]
 #[serial]
-fn list_command_outputs_items() {
+fn list_command_outputs_hosts() {
     let ctx = TestContext::new();
 
-    ctx.cli().args(["add", "first", "--content", "one"]).assert().success();
-    ctx.cli().args(["add", "second", "--content", "two"]).assert().success();
+    ctx.cli().args(["generate", "--host", "alpha.test"]).assert().success();
+    ctx.cli().args(["generate", "--host", "beta.test", "--type", "rsa"]).assert().success();
 
     ctx.cli()
         .arg("list")
         .assert()
         .success()
-        .stdout(predicate::str::contains("first").and(predicate::str::contains("second")));
+        .stdout(predicate::str::contains("alpha.test").and(predicate::str::contains("beta.test")));
 }
 
 #[test]
 #[serial]
-fn delete_command_removes_item() {
+fn remove_command_cleans_up_assets() {
     let ctx = TestContext::new();
 
-    ctx.cli().args(["add", "temp", "--content", "value"]).assert().success();
+    ctx.cli().args(["generate", "--host", "cleanup.test"]).assert().success();
 
-    assert!(ctx.saved_item_path("temp").exists(), "Item should exist before delete");
+    let config = ctx.host_config_path("cleanup.test");
+    assert!(config.exists(), "Config should exist before removal");
 
     ctx.cli()
-        .arg("delete")
-        .arg("temp")
+        .args(["remove", "--host", "cleanup.test"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Deleted item 'temp'"));
+        .stdout(predicate::str::contains("Removed SSH assets for 'cleanup.test'"));
 
-    assert!(!ctx.saved_item_path("temp").exists(), "Item should not exist after delete");
-}
-
-#[test]
-#[serial]
-fn delete_nonexistent_item_fails() {
-    let ctx = TestContext::new();
-
-    ctx.cli()
-        .arg("delete")
-        .arg("nonexistent")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Item 'nonexistent' was not found"));
-}
-
-#[test]
-#[serial]
-fn add_with_invalid_id_fails() {
-    let ctx = TestContext::new();
-
-    ctx.cli()
-        .args(["add", "invalid/id", "--content", "value"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("invalid item identifier"));
+    assert!(!config.exists(), "Config should be removed");
+    let private_key = ctx.private_key_path("ed25519", "cleanup.test");
+    assert!(!private_key.exists(), "Private key should be removed");
 }
