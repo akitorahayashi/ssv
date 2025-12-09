@@ -13,6 +13,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Generate a key pair and host configuration file
+    #[clap(visible_alias = "gen")]
     Generate {
         /// Hostname to manage (e.g., github.com)
         #[arg(long, value_name = "HOST")]
@@ -28,8 +29,10 @@ enum Commands {
         port: Option<u16>,
     },
     /// List managed hosts
+    #[clap(visible_alias = "ls")]
     List,
     /// Remove key pairs and configuration for a host
+    #[clap(visible_alias = "rm")]
     Remove {
         /// Hostname to remove
         #[arg(long, value_name = "HOST")]
