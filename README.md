@@ -8,6 +8,15 @@
 - **Key generation** – `ssv generate` wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
 - **Inventory awareness** – `ssv list` scans managed configs and shows the hostnames under management.
 - **Safe teardown** – `ssv remove` deletes matching configs and key pairs without erroring if files were already removed manually.
+- **Agentless** – generated configurations use explicit `IdentityFile` paths, so `ssh-agent` and reboots are not required.
+
+## Setup
+
+Add the following line to your `~/.ssh/config` to ensure managed hosts are loaded:
+
+```ssh
+Include ~/.ssh/conf.d/*.conf
+```
 
 ## Usage
 
