@@ -44,10 +44,23 @@ fn main() {
 
     let result: Result<(), AppError> = match cli.command {
         Commands::Generate { host, key_type, user, port } => {
-            ssv::generate(&host, &key_type, user.as_deref(), port)
+            ssv::generate(&host, &key_type, user.as_deref(), port).map(|public_key| {
+                println!("✅ Generated SSH assets for '{host}'");
+                println!("{public_key}");
+            })
         }
-        Commands::List => ssv::list().map(|_| ()),
-        Commands::Remove { host } => ssv::remove(&host),
+        Commands::List => ssv::list().map(|hosts| {
+            if hosts.is_empty() {
+                println!("(no hosts managed yet)");
+            } else {
+                for host in hosts {
+                    println!("{host}");
+                }
+            }
+        }),
+        Commands::Remove { host } => ssv::remove(&host).map(|()| {
+            println!("🗑️  Removed SSH assets for '{host}'");
+        }),
     };
 
     if let Err(e) = result {

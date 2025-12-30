@@ -14,14 +14,10 @@ pub fn generate(
     key_type: &str,
     user: Option<&str>,
     port: Option<u16>,
-) -> Result<(), AppError> {
+) -> Result<String, AppError> {
     let paths = SshPaths::from_env()?;
     let command = GenerateHost { host, key_type, user, port };
-    let public_key = command.execute(&paths)?;
-
-    println!("✅ Generated SSH assets for '{host}'");
-    println!("{public_key}");
-    Ok(())
+    command.execute(&paths)
 }
 
 /// List all managed hosts underneath ~/.ssh/conf.d.
@@ -30,17 +26,7 @@ pub fn list() -> Result<Vec<String>, AppError> {
     paths.ensure_base_dirs()?;
 
     let command = ListHosts;
-    let hosts = command.execute(&paths)?;
-
-    if hosts.is_empty() {
-        println!("(no hosts managed yet)");
-    } else {
-        for host in &hosts {
-            println!("{host}");
-        }
-    }
-
-    Ok(hosts)
+    command.execute(&paths)
 }
 
 /// Remove the key pair and configuration associated with a host.

@@ -11,7 +11,9 @@ fn generate_creates_assets_via_library_api() {
     let ctx = TestContext::new();
 
     ctx.with_dir(ctx.work_dir(), || {
-        generate("code.test", "ed25519", Some("git"), Some(2222)).expect("generate should succeed");
+        let public_key = generate("code.test", "ed25519", Some("git"), Some(2222))
+            .expect("generate should succeed");
+        assert!(!public_key.is_empty());
     });
 
     assert!(ctx.host_config_path("code.test").exists());
