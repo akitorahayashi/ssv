@@ -1,5 +1,4 @@
 use clap::{Parser, Subcommand};
-use ssv::commands;
 use ssv::error::AppError;
 
 #[derive(Parser)]
@@ -45,10 +44,10 @@ fn main() {
 
     let result: Result<(), AppError> = match cli.command {
         Commands::Generate { host, key_type, user, port } => {
-            commands::generate(&host, &key_type, user.as_deref(), port)
+            ssv::generate(&host, &key_type, user.as_deref(), port)
         }
-        Commands::List => commands::list().map(|_| ()),
-        Commands::Remove { host } => commands::remove(&host),
+        Commands::List => ssv::list().map(|_| ()),
+        Commands::Remove { host } => ssv::remove(&host),
     };
 
     if let Err(e) = result {
