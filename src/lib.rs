@@ -4,9 +4,18 @@ mod commands;
 pub mod error;
 mod ssh_paths;
 
-use commands::{generate_host::GenerateHost, list_hosts::ListHosts, remove_host::RemoveHost};
+use commands::{
+    generate_host::GenerateHost, init::Init, list_hosts::ListHosts, remove_host::RemoveHost,
+};
 use error::AppError;
 use ssh_paths::SshPaths;
+
+/// Ensure the SSH bootstrap required for managed host configs exists.
+pub fn init() -> Result<(), AppError> {
+    let paths = SshPaths::from_env()?;
+    let command = Init;
+    command.execute(&paths)
+}
 
 /// Generate a new SSH key pair and configuration for the provided host.
 pub fn generate(
@@ -16,6 +25,7 @@ pub fn generate(
     port: Option<u16>,
 ) -> Result<String, AppError> {
     let paths = SshPaths::from_env()?;
+    paths.ensure_bootstrap()?;
     let command = GenerateHost { host, key_type, user, port };
     command.execute(&paths)
 }

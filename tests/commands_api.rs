@@ -2,8 +2,21 @@ mod common;
 
 use common::TestContext;
 use serial_test::serial;
-use ssv::{generate, list, remove};
+use ssv::{generate, init, list, remove};
 use std::fs;
+
+#[test]
+#[serial]
+fn init_creates_bootstrap_via_library_api() {
+    let ctx = TestContext::new();
+
+    ctx.with_dir(ctx.work_dir(), || {
+        init().expect("init should succeed");
+    });
+
+    let config = fs::read_to_string(ctx.ssh_config_path()).expect("config should exist");
+    assert!(config.contains("Include ~/.ssh/conf.d/*.conf"));
+}
 
 #[test]
 #[serial]

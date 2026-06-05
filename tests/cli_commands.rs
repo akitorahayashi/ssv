@@ -7,6 +7,21 @@ use std::fs;
 
 #[test]
 #[serial]
+fn init_command_bootstraps_ssh_layout() {
+    let ctx = TestContext::new();
+
+    ctx.cli()
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("✅ SSH bootstrap is ready"));
+
+    let config = fs::read_to_string(ctx.ssh_config_path()).expect("config should exist");
+    assert!(config.contains("Include ~/.ssh/conf.d/*.conf"));
+}
+
+#[test]
+#[serial]
 fn generate_command_provisions_assets() {
     let ctx = TestContext::new();
 
@@ -27,6 +42,9 @@ fn generate_command_provisions_assets() {
     assert!(private_key.exists(), "Private key should be created");
     let contents = fs::read_to_string(private_key).expect("Failed to read private key");
     assert!(contents.contains("PRIVATE-ed25519"));
+
+    let ssh_config = fs::read_to_string(ctx.ssh_config_path()).expect("ssh config should exist");
+    assert!(ssh_config.contains("Include ~/.ssh/conf.d/*.conf"));
 }
 
 #[test]
