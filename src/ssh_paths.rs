@@ -113,7 +113,7 @@ impl SshPaths {
         }
 
         let contents = fs::read_to_string(&path)?;
-        if contents.lines().any(|line| line.trim() == SSV_INCLUDE_LINE) {
+        if contents.lines().any(Self::is_ssv_include_line) {
             self.apply_file_permissions(&path)?;
             return Ok(());
         }
@@ -153,6 +153,15 @@ impl SshPaths {
             fs::set_permissions(path, perms)?;
         }
         Ok(())
+    }
+
+    fn is_ssv_include_line(line: &str) -> bool {
+        let mut parts = line.split('#').next().unwrap_or("").split_whitespace();
+        matches!(
+            (parts.next(), parts.next(), parts.next()),
+            (Some(command), Some(value), None)
+                if command.eq_ignore_ascii_case("include") && value == "~/.ssh/conf.d/*.conf"
+        )
     }
 }
 
@@ -215,5 +224,21 @@ mod tests {
         let config = fs::read_to_string(paths.main_config_path()).expect("main config");
         assert_eq!(config.matches(SSV_INCLUDE_LINE).count(), 1);
         assert!(config.contains("Host *\n  ServerAliveInterval 60\n"));
+    }
+
+    #[test]
+    fn ensure_bootstrap_recognizes_equivalent_include_line() {
+        let (_temp, paths) = temp_paths();
+        paths.ensure_base_dirs().expect("base dirs");
+        fs::write(
+            paths.main_config_path(),
+            "Host *\n  ServerAliveInterval 60\ninclude   ~/.ssh/conf.d/*.conf   # managed elsewhere\n",
+        )
+        .expect("seed config");
+
+        paths.ensure_bootstrap().expect("bootstrap should succeed");
+
+        let config = fs::read_to_string(paths.main_config_path()).expect("main config");
+        assert_eq!(config.matches("~/.ssh/conf.d/*.conf").count(), 1);
     }
 }
