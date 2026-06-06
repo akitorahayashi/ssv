@@ -79,6 +79,10 @@ impl AuditReport {
         self.findings.iter().any(|finding| finding.severity == AuditSeverity::Error)
     }
 
+    pub fn has_warnings(&self) -> bool {
+        self.findings.iter().any(|finding| finding.severity == AuditSeverity::Warning)
+    }
+
     fn error(&mut self, code: AuditCode, path: &Path, message: impl Into<String>) {
         self.findings.push(AuditFinding {
             severity: AuditSeverity::Error,

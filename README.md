@@ -58,7 +58,7 @@ RUST_TEST_THREADS=1 cargo test --all-targets --all-features
 
 ### Testing
 
-Integration tests in `tests/` exercise the CLI and library API with a stubbed `ssh-keygen`. They rely on `serial_test` because the fixtures manipulate the `HOME` environment variable. Run the full suite with `cargo test` before committing changes.
+Integration tests in `tests/` exercise the CLI and library API with a stubbed `ssh-keygen`. They rely on `serial_test` because the fixtures manipulate the `HOME` environment variable. Run the full suite with `RUST_TEST_THREADS=1 cargo test --all-targets --all-features` before committing changes.
 
 ## License
 

@@ -15,6 +15,20 @@ fn list_and_audit_do_not_create_missing_directories() {
 
 #[test]
 #[serial]
+#[cfg(unix)]
+fn list_surfaces_permission_errors() {
+    let context = TestContext::new();
+    ssv::init().expect("init should succeed");
+    context.set_mode(&context.ssh_root(), 0o000);
+
+    let result = list();
+
+    context.set_mode(&context.ssh_root(), 0o700);
+    assert!(result.is_err());
+}
+
+#[test]
+#[serial]
 fn show_and_audit_do_not_repair_permissions() {
     let context = TestContext::new();
     generate("readonly.test", "ed25519", None, None).expect("generate should succeed");

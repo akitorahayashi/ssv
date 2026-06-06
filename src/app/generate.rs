@@ -30,9 +30,15 @@ pub(crate) fn execute(
     }
 
     keygen::generate(key_type, &private)?;
-    permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
-    write_config(&config, &HostConfig::render(host, key_type, user, port))?;
-    Ok(fs::read_to_string(public)?)
+    let result = (|| {
+        permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
+        write_config(&config, &HostConfig::render(host, key_type, user, port))?;
+        Ok(fs::read_to_string(&public)?)
+    })();
+    if result.is_err() {
+        remove_generated_artifacts([config.as_path(), public.as_path(), private.as_path()]);
+    }
+    result
 }
 
 fn write_config(path: &Path, contents: &str) -> Result<(), AppError> {
@@ -40,4 +46,10 @@ fn write_config(path: &Path, contents: &str) -> Result<(), AppError> {
     file.write_all(contents.as_bytes())?;
     file.sync_all()?;
     permissions::set_mode(path, permissions::PRIVATE_MODE)
+}
+
+fn remove_generated_artifacts<const N: usize>(paths: [&Path; N]) {
+    for path in paths {
+        let _ = fs::remove_file(path);
+    }
 }

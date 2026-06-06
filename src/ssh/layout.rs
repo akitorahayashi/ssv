@@ -232,15 +232,34 @@ impl Layout {
             return Ok(());
         }
 
-        let mut updated = contents;
-        if !updated.is_empty() && !updated.ends_with('\n') {
-            updated.push('\n');
-        }
-        updated.push_str(MANAGED_INCLUDE_LINE);
-        updated.push('\n');
+        let insertion = format!("{MANAGED_INCLUDE_LINE}\n");
+        let updated = match first_block_offset(&contents) {
+            Some(offset) => {
+                let mut updated = String::with_capacity(contents.len() + insertion.len());
+                updated.push_str(&contents[..offset]);
+                updated.push_str(&insertion);
+                updated.push_str(&contents[offset..]);
+                updated
+            }
+            None => format!("{insertion}{contents}"),
+        };
         fs::write(&path, updated)?;
         permissions::set_mode(&path, permissions::PRIVATE_MODE)
     }
+}
+
+fn first_block_offset(contents: &str) -> Option<usize> {
+    let mut offset = 0;
+    for line in contents.split_inclusive('\n') {
+        let name = line.split_whitespace().next();
+        if name.is_some_and(|name| {
+            name.eq_ignore_ascii_case("Host") || name.eq_ignore_ascii_case("Match")
+        }) {
+            return Some(offset);
+        }
+        offset += line.len();
+    }
+    None
 }
 
 fn unmanaged_identity(path: &Path, host: &str) -> AppError {
@@ -322,6 +341,22 @@ mod tests {
 
         let config = fs::read_to_string(layout.config()).expect("config should exist");
         assert_eq!(config.matches("~/.ssh/conf.d/*.conf").count(), 1);
+    }
+
+    #[test]
+    fn managed_include_is_inserted_before_first_block() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let layout = Layout { home: temp.path().to_path_buf() };
+        layout.prepare_dir(&layout.root()).expect("root should exist");
+        layout.prepare_dir(&layout.hosts()).expect("hosts should exist");
+        fs::write(layout.config(), "# settings\nHost example\n  User test\n")
+            .expect("config should be written");
+
+        layout.ensure_bootstrap().expect("bootstrap should succeed");
+
+        let config = fs::read_to_string(layout.config()).expect("config should exist");
+        assert_eq!(config, "# settings\nInclude ~/.ssh/conf.d/*.conf\nHost example\n  User test\n");
+        assert!(has_managed_include(&config));
     }
 
     #[test]

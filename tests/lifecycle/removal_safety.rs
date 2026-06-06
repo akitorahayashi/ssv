@@ -29,3 +29,19 @@ fn remove_refuses_identity_not_owned_by_host() {
     );
     assert!(context.host_config("personal.test").exists());
 }
+
+#[test]
+#[serial]
+fn remove_keeps_config_when_key_removal_fails() {
+    let context = TestContext::new();
+    generate("retry.test", "ed25519", None, None).expect("generate should succeed");
+    fs::remove_file(context.public_key("ed25519", "retry.test"))
+        .expect("public key should be removed");
+    fs::create_dir(context.public_key("ed25519", "retry.test"))
+        .expect("public key path should block removal");
+
+    assert!(remove("retry.test").is_err());
+
+    assert!(context.host_config("retry.test").exists());
+    assert!(!context.private_key("ed25519", "retry.test").exists());
+}

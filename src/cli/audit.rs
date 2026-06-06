@@ -13,6 +13,9 @@ pub(crate) fn run() -> Result {
     }
     if report.has_errors() {
         Ok(Exit::Failure)
+    } else if report.has_warnings() {
+        println!("SSH assets have warnings");
+        Ok(Exit::Success)
     } else {
         println!("SSH assets are healthy");
         Ok(Exit::Success)
