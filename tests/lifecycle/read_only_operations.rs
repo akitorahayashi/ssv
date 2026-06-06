@@ -1,14 +1,14 @@
 use crate::harness::TestContext;
 use serial_test::serial;
-use ssv::{audit, generate, list, show};
+use ssv::{AppError, audit, generate, list, show};
 use std::fs;
 
 #[test]
 #[serial]
-fn list_and_audit_do_not_create_missing_directories() {
+fn list_requires_bootstrap_when_managed_directory_is_missing() {
     let context = TestContext::new();
 
-    assert!(list().expect("list should succeed").is_empty());
+    assert!(matches!(list(), Err(AppError::BootstrapRequired(_))));
     assert!(audit().expect("audit should return findings").has_errors());
     assert!(!context.ssh_root().exists());
 }

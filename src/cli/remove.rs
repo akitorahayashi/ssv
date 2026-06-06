@@ -1,7 +1,7 @@
 use crate::cli::{Exit, Result};
 
 pub(crate) fn run(host: &str) -> Result {
-    crate::remove(host)?;
-    println!("Removed SSH assets for '{host}'");
+    let status = crate::remove(host)?;
+    println!("{}", status.message(host));
     Ok(Exit::Success)
 }

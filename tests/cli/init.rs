@@ -13,7 +13,14 @@ fn init_bootstraps_ssh_layout() {
         .arg("init")
         .assert()
         .success()
-        .stdout(predicate::str::contains("SSH bootstrap is ready"));
+        .stdout(predicate::str::contains("Created SSH bootstrap directories and config"));
+
+    context
+        .cli()
+        .arg("init")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("SSH bootstrap is already up-to-date"));
 
     let config = fs::read_to_string(context.main_config()).expect("config should exist");
     assert!(config.contains("Include ~/.ssh/conf.d/*.conf"));
