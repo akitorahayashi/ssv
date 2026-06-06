@@ -35,11 +35,13 @@ pub(crate) fn execute(
         write_config(&config, &HostConfig::render(host, key_type, user, port))?;
         Ok(fs::read_to_string(&public)?)
     })();
-    if result.is_err() {
-        eprintln!("Rolled back partial SSH assets due to failure");
-        remove_generated_artifacts([config.as_path(), public.as_path(), private.as_path()]);
+    match result {
+        Ok(public_key) => Ok(public_key),
+        Err(error) => {
+            remove_generated_artifacts([config.as_path(), public.as_path(), private.as_path()]);
+            Err(AppError::rolled_back(error))
+        }
     }
-    result
 }
 
 fn write_config(path: &Path, contents: &str) -> Result<(), AppError> {

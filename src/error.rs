@@ -14,6 +14,8 @@ pub enum AppError {
     HostNotFound(String),
     /// Raised when managed SSH bootstrap directories have not been initialized yet.
     BootstrapRequired(PathBuf),
+    /// Indicates that a command rolled back partial SSH assets after a failure.
+    RolledBack(Box<AppError>),
     /// Indicates a validation problem with user-provided arguments or derived data.
     ValidationError(String),
     /// Indicates a path outside the directory owned by ssv.
@@ -38,6 +40,9 @@ impl Display for AppError {
                     path.display()
                 )
             }
+            AppError::RolledBack(error) => {
+                write!(f, "Rolled back partial SSH assets due to failure: {error}")
+            }
             AppError::ValidationError(message) => write!(f, "{message}"),
             AppError::OutsideManagedRoot(path) => {
                 write!(f, "Path '{}' is outside the managed SSH directory", path.display())
@@ -53,6 +58,7 @@ impl Error for AppError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             AppError::Io(err) => Some(err),
+            AppError::RolledBack(error) => Some(error.as_ref()),
             AppError::ConfigError(_)
             | AppError::HostNotFound(_)
             | AppError::BootstrapRequired(_)
@@ -80,6 +86,10 @@ impl AppError {
 
     pub(crate) fn bootstrap_missing(path: PathBuf) -> Self {
         AppError::BootstrapRequired(path)
+    }
+
+    pub(crate) fn rolled_back(error: AppError) -> Self {
+        AppError::RolledBack(Box::new(error))
     }
 
     pub(crate) fn command_failed(program: &str, status: ExitStatus) -> Self {

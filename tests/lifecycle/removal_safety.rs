@@ -32,7 +32,7 @@ fn remove_refuses_identity_not_owned_by_host() {
 
 #[test]
 #[serial]
-fn remove_keeps_config_when_key_removal_fails() {
+fn remove_removes_host_definition_before_key_cleanup_failure() {
     let context = TestContext::new();
     generate("retry.test", "ed25519", None, None).expect("generate should succeed");
     fs::remove_file(context.public_key("ed25519", "retry.test"))
@@ -42,6 +42,6 @@ fn remove_keeps_config_when_key_removal_fails() {
 
     assert!(remove("retry.test").is_err());
 
-    assert!(context.host_config("retry.test").exists());
+    assert!(!context.host_config("retry.test").exists());
     assert!(!context.private_key("ed25519", "retry.test").exists());
 }

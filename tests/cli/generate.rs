@@ -36,7 +36,6 @@ fn generate_reports_rollback_when_public_key_read_fails() {
     let mut permissions = fs::metadata(&keygen).expect("keygen metadata").permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&keygen, permissions).expect("keygen should be executable");
-    unsafe { std::env::set_var("SSV_SSH_KEYGEN_PATH", &keygen) };
 
     let mut command = context.cli();
     command.env("SSV_SSH_KEYGEN_PATH", &keygen);

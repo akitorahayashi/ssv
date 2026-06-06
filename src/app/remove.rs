@@ -38,6 +38,8 @@ pub(crate) fn execute(host: &str) -> Result<RemovalStatus, AppError> {
     layout.require_host_identity(&config.identity, host)?;
     let public = layout.public_key(&config.identity)?;
 
+    fs::remove_file(config_path)?;
+
     let mut missing = 0;
     if !remove_if_present(&config.identity)? {
         missing += 1;
@@ -45,7 +47,6 @@ pub(crate) fn execute(host: &str) -> Result<RemovalStatus, AppError> {
     if !remove_if_present(&public)? {
         missing += 1;
     }
-    fs::remove_file(config_path)?;
 
     if missing == 0 { Ok(RemovalStatus::Removed) } else { Ok(RemovalStatus::Partial { missing }) }
 }
