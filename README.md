@@ -1,10 +1,10 @@
 # ssv
 
-`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It generates keys via `ssh-keygen`, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
+`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It bootstraps the required SSH layout, generates keys via `ssh-keygen`, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
 
 ## Features
 
-- Secure bootstrap: `ssv generate` ensures `~/.ssh` and `~/.ssh/conf.d` exist with `0700` permissions.
+- Secure bootstrap: `ssv init` ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
 - Key generation: `ssv generate` wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
 - Inventory awareness: `ssv list` scans managed configs and shows the hostnames under management.
 - Public key lookup: `ssv show <HOST>` prints the public key referenced by a managed host config.
@@ -14,15 +14,18 @@
 
 ## Setup
 
-Add the following line to your `~/.ssh/config` to ensure managed hosts are loaded:
-
-```ssh
-Include ~/.ssh/conf.d/*.conf
+```bash
+ssv init
 ```
+
+`ssv init` ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
 
 ## Usage
 
 ```bash
+# Bootstrap SSH config integration
+ssv init
+
 # Generate keys/config for github.com
 ssv generate --host github.com --user git
 

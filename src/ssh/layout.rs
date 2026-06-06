@@ -1,7 +1,10 @@
 use crate::error::AppError;
+use crate::ssh::host_config::has_managed_include;
 use crate::ssh::permissions;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+
+const MANAGED_INCLUDE_LINE: &str = "Include ~/.ssh/conf.d/*.conf";
 
 #[derive(Debug, Clone)]
 pub(crate) struct Layout {
@@ -52,8 +55,13 @@ impl Layout {
     }
 
     pub(crate) fn prepare_for_generate(&self) -> Result<(), AppError> {
+        self.ensure_bootstrap()
+    }
+
+    pub(crate) fn ensure_bootstrap(&self) -> Result<(), AppError> {
         self.prepare_dir(&self.root())?;
-        self.prepare_dir(&self.hosts())
+        self.prepare_dir(&self.hosts())?;
+        self.ensure_main_config_include()
     }
 
     pub(crate) fn resolve_identity(&self, value: &str) -> Result<PathBuf, AppError> {
@@ -145,6 +153,30 @@ impl Layout {
         fs::create_dir_all(path)?;
         permissions::set_mode(path, permissions::DIRECTORY_MODE)
     }
+
+    fn ensure_main_config_include(&self) -> Result<(), AppError> {
+        let path = self.config();
+        if !path.exists() {
+            fs::write(&path, format!("{MANAGED_INCLUDE_LINE}\n"))?;
+            permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
+            return Ok(());
+        }
+
+        let contents = fs::read_to_string(&path)?;
+        if has_managed_include(&contents) {
+            permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
+            return Ok(());
+        }
+
+        let mut updated = contents;
+        if !updated.is_empty() && !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        updated.push_str(MANAGED_INCLUDE_LINE);
+        updated.push('\n');
+        fs::write(&path, updated)?;
+        permissions::set_mode(&path, permissions::PRIVATE_MODE)
+    }
 }
 
 fn is_symlink_if_present(path: &Path) -> Result<bool, AppError> {
@@ -194,5 +226,15 @@ mod tests {
     #[test]
     fn identity_resolution_rejects_paths_outside_root() {
         assert!(layout().resolve_identity("/outside/key").is_err());
+    }
+
+    #[test]
+    fn include_detection_is_idempotent() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let layout = Layout { home: temp.path().to_path_buf() };
+        layout.ensure_bootstrap().expect("bootstrap should succeed");
+        layout.ensure_bootstrap().expect("bootstrap should remain idempotent");
+        let config = fs::read_to_string(layout.config()).expect("config should exist");
+        assert_eq!(config.matches("~/.ssh/conf.d/*.conf").count(), 1);
     }
 }

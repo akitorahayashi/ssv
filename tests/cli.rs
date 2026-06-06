@@ -6,6 +6,8 @@ mod audit;
 mod generate;
 #[path = "cli/help_and_version.rs"]
 mod help_and_version;
+#[path = "cli/init.rs"]
+mod init;
 #[path = "cli/list.rs"]
 mod list;
 #[path = "cli/remove.rs"]

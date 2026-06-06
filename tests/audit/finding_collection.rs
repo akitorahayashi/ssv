@@ -15,5 +15,5 @@ fn audit_collects_findings_across_assets() {
     let report = audit().expect("audit should succeed");
     let missing =
         report.findings.iter().filter(|finding| finding.code == AuditCode::Missing).count();
-    assert!(missing >= 3, "main config and both key files should be reported");
+    assert!(missing >= 2, "missing key assets should be reported for both hosts");
 }

@@ -1,5 +1,6 @@
 mod audit;
 mod generate;
+mod init;
 mod list;
 mod remove;
 mod show;
@@ -18,6 +19,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Ensure ~/.ssh, ~/.ssh/conf.d, and ~/.ssh/config are ready for ssv-managed hosts
+    Init,
     /// Generate a key pair and host configuration file
     #[command(visible_alias = "gen")]
     Generate {
@@ -52,6 +55,7 @@ enum Commands {
 
 pub fn run() {
     let result = match Cli::parse().command {
+        Commands::Init => init::run(),
         Commands::Generate { host, key_type, user, port } => {
             generate::run(&host, &key_type, user.as_deref(), port)
         }

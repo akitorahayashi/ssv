@@ -9,6 +9,11 @@ pub use app::audit::{AuditCode, AuditFinding, AuditReport, AuditSeverity};
 pub use cli::run as cli;
 pub use error::AppError;
 
+/// Ensure the SSH bootstrap required for managed host configs exists.
+pub fn init() -> Result<(), AppError> {
+    app::init::execute()
+}
+
 /// Generate a new SSH key pair and configuration for the provided host.
 pub fn generate(
     host: &str,
