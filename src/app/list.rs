@@ -4,9 +4,11 @@ use std::fs;
 
 pub(crate) fn execute() -> Result<Vec<String>, AppError> {
     let hosts_dir = Layout::from_env()?.hosts();
-    let entries = match fs::read_dir(hosts_dir) {
+    let entries = match fs::read_dir(&hosts_dir) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(AppError::bootstrap_missing(hosts_dir));
+        }
         Err(error) => return Err(error.into()),
     };
 

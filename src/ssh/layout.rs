@@ -1,10 +1,41 @@
 use crate::error::AppError;
 use crate::ssh::host_config::has_managed_include;
 use crate::ssh::permissions;
+use std::fmt::{self, Display};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 const MANAGED_INCLUDE_LINE: &str = "Include ~/.ssh/conf.d/*.conf";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BootstrapStatus {
+    Created,
+    Repaired,
+    UpToDate,
+}
+
+impl BootstrapStatus {
+    fn combine(self, other: Self) -> Self {
+        use BootstrapStatus::{Created, Repaired, UpToDate};
+        match (self, other) {
+            (Created, _) | (_, Created) => Created,
+            (Repaired, _) | (_, Repaired) => Repaired,
+            (UpToDate, UpToDate) => UpToDate,
+        }
+    }
+}
+
+impl Display for BootstrapStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BootstrapStatus::Created => write!(f, "Created SSH bootstrap directories and config"),
+            BootstrapStatus::Repaired => {
+                write!(f, "Repaired SSH bootstrap permissions and includes")
+            }
+            BootstrapStatus::UpToDate => write!(f, "SSH bootstrap is already up-to-date"),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct Layout {
@@ -97,13 +128,15 @@ impl Layout {
     }
 
     pub(crate) fn prepare_for_generate(&self) -> Result<(), AppError> {
-        self.ensure_bootstrap()
+        self.ensure_bootstrap().map(|_| ())
     }
 
-    pub(crate) fn ensure_bootstrap(&self) -> Result<(), AppError> {
-        self.prepare_dir(&self.root())?;
-        self.prepare_dir(&self.hosts())?;
-        self.ensure_main_config_include()
+    pub(crate) fn ensure_bootstrap(&self) -> Result<BootstrapStatus, AppError> {
+        let mut status = BootstrapStatus::UpToDate;
+        status = status.combine(self.prepare_dir(&self.root())?);
+        status = status.combine(self.prepare_dir(&self.hosts())?);
+        status = status.combine(self.ensure_main_config_include()?);
+        Ok(status)
     }
 
     pub(crate) fn resolve_identity(&self, value: &str) -> Result<PathBuf, AppError> {
@@ -191,60 +224,86 @@ impl Layout {
         Ok(())
     }
 
-    fn prepare_dir(&self, path: &Path) -> Result<(), AppError> {
+    fn prepare_dir(&self, path: &Path) -> Result<BootstrapStatus, AppError> {
         match fs::symlink_metadata(path) {
-            Ok(metadata) if metadata.file_type().is_dir() => {}
-            Ok(_) => {
-                return Err(AppError::validation(format!(
-                    "refusing to prepare non-directory path '{}'",
-                    path.display()
-                )));
+            Ok(metadata) if metadata.file_type().is_dir() => {
+                if self.requires_mode_update(&metadata, permissions::DIRECTORY_MODE) {
+                    permissions::set_mode(path, permissions::DIRECTORY_MODE)?;
+                    Ok(BootstrapStatus::Repaired)
+                } else {
+                    Ok(BootstrapStatus::UpToDate)
+                }
             }
+            Ok(_) => Err(AppError::validation(format!(
+                "refusing to prepare non-directory path '{}'",
+                path.display()
+            ))),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 fs::create_dir_all(path)?;
+                permissions::set_mode(path, permissions::DIRECTORY_MODE)?;
+                Ok(BootstrapStatus::Created)
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => Err(error.into()),
         }
-        permissions::set_mode(path, permissions::DIRECTORY_MODE)
     }
 
-    fn ensure_main_config_include(&self) -> Result<(), AppError> {
+    fn ensure_main_config_include(&self) -> Result<BootstrapStatus, AppError> {
         let path = self.config();
         match fs::symlink_metadata(&path) {
-            Ok(metadata) if metadata.file_type().is_file() => {}
-            Ok(_) => {
-                return Err(AppError::validation(format!(
-                    "refusing to prepare non-file path '{}'",
-                    path.display()
-                )));
+            Ok(metadata) if metadata.file_type().is_file() => {
+                let mut status = BootstrapStatus::UpToDate;
+                if self.requires_mode_update(&metadata, permissions::PRIVATE_MODE) {
+                    permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
+                    status = BootstrapStatus::Repaired;
+                }
+
+                let contents = fs::read_to_string(&path)?;
+                if has_managed_include(&contents) {
+                    return Ok(status);
+                }
+
+                let insertion = format!("{MANAGED_INCLUDE_LINE}\n");
+                let updated = match first_block_offset(&contents) {
+                    Some(offset) => {
+                        let mut updated = String::with_capacity(contents.len() + insertion.len());
+                        updated.push_str(&contents[..offset]);
+                        updated.push_str(&insertion);
+                        updated.push_str(&contents[offset..]);
+                        updated
+                    }
+                    None => format!("{insertion}{contents}"),
+                };
+                fs::write(&path, updated)?;
+                if status == BootstrapStatus::UpToDate {
+                    Ok(BootstrapStatus::Repaired)
+                } else {
+                    Ok(status)
+                }
             }
+            Ok(_) => Err(AppError::validation(format!(
+                "refusing to prepare non-file path '{}'",
+                path.display()
+            ))),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 fs::write(&path, format!("{MANAGED_INCLUDE_LINE}\n"))?;
                 permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
-                return Ok(());
+                Ok(BootstrapStatus::Created)
             }
-            Err(error) => return Err(error.into()),
+            Err(error) => Err(error.into()),
         }
+    }
 
-        let contents = fs::read_to_string(&path)?;
-        if has_managed_include(&contents) {
-            permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
-            return Ok(());
+    fn requires_mode_update(&self, metadata: &fs::Metadata, expected: u32) -> bool {
+        #[cfg(unix)]
+        {
+            permissions::mode(metadata) != expected
         }
-
-        let insertion = format!("{MANAGED_INCLUDE_LINE}\n");
-        let updated = match first_block_offset(&contents) {
-            Some(offset) => {
-                let mut updated = String::with_capacity(contents.len() + insertion.len());
-                updated.push_str(&contents[..offset]);
-                updated.push_str(&insertion);
-                updated.push_str(&contents[offset..]);
-                updated
-            }
-            None => format!("{insertion}{contents}"),
-        };
-        fs::write(&path, updated)?;
-        permissions::set_mode(&path, permissions::PRIVATE_MODE)
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+            let _ = expected;
+            false
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::cli::{Exit, Result};
 
 pub(crate) fn run() -> Result {
-    crate::init()?;
-    println!("SSH bootstrap is ready");
+    let status = crate::init()?;
+    println!("{status}");
     Ok(Exit::Success)
 }

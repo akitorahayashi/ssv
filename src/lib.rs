@@ -6,11 +6,13 @@ pub mod error;
 mod ssh;
 
 pub use app::audit::{AuditCode, AuditFinding, AuditReport, AuditSeverity};
+pub use app::remove::RemovalStatus;
 pub use cli::run as cli;
 pub use error::AppError;
+pub use ssh::layout::BootstrapStatus;
 
 /// Ensure the SSH bootstrap required for managed host configs exists.
-pub fn init() -> Result<(), AppError> {
+pub fn init() -> Result<BootstrapStatus, AppError> {
     app::init::execute()
 }
 
@@ -30,7 +32,7 @@ pub fn list() -> Result<Vec<String>, AppError> {
 }
 
 /// Remove the key pair and configuration associated with a host.
-pub fn remove(host: &str) -> Result<(), AppError> {
+pub fn remove(host: &str) -> Result<RemovalStatus, AppError> {
     app::remove::execute(host)
 }
 

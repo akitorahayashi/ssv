@@ -36,6 +36,7 @@ pub(crate) fn execute(
         Ok(fs::read_to_string(&public)?)
     })();
     if result.is_err() {
+        eprintln!("Rolled back partial SSH assets due to failure");
         remove_generated_artifacts([config.as_path(), public.as_path(), private.as_path()]);
     }
     result
