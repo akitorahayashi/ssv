@@ -75,6 +75,11 @@ impl TestContext {
         self.home().join(".ssh").join("conf.d").join(format!("{host}.conf"))
     }
 
+    /// Path to the main SSH config file.
+    pub fn ssh_config_path(&self) -> PathBuf {
+        self.home().join(".ssh").join("config")
+    }
+
     /// Path to the private key generated for a host (defaults to ed25519).
     pub fn private_key_path(&self, key_type: &str, host: &str) -> PathBuf {
         self.home().join(".ssh").join(format!("id_{}_{}", key_type, host))

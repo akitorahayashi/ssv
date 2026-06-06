@@ -1,3 +1,4 @@
 /target
+/coverage
 .tmp/*
 .claude/settings.local.json

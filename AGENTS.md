@@ -1,7 +1,7 @@
 # ssv Development Overview
 
 ## Project Summary
-`ssv` is a Rust CLI that manages SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It wraps `ssh-keygen` to generate keys, lists managed hosts, and safely removes keys/configs when a host is retired.
+`ssv` is a Rust CLI that owns the SSH bootstrap and manages SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It ensures the required `~/.ssh/config` include entry exists, wraps `ssh-keygen` to generate keys, lists managed hosts, and safely removes keys/configs when a host is retired.
 
 ## Tech Stack
 - Rust 2024 edition

@@ -11,6 +11,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Ensure ~/.ssh, ~/.ssh/conf.d, and ~/.ssh/config are ready for ssv-managed hosts
+    Init,
     /// Generate a key pair and host configuration file
     #[clap(visible_alias = "gen")]
     Generate {
@@ -43,6 +45,9 @@ fn main() {
     let cli = Cli::parse();
 
     let result: Result<(), AppError> = match cli.command {
+        Commands::Init => ssv::init().map(|()| {
+            println!("✅ SSH bootstrap is ready");
+        }),
         Commands::Generate { host, key_type, user, port } => {
             ssv::generate(&host, &key_type, user.as_deref(), port).map(|public_key| {
                 println!("✅ Generated SSH assets for '{host}'");
