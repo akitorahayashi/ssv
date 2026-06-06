@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::io;
+use std::path::PathBuf;
 use std::process::ExitStatus;
 
 /// Library-wide error type capturing filesystem, validation, and command execution failures.
@@ -13,6 +14,8 @@ pub enum AppError {
     HostNotFound(String),
     /// Indicates a validation problem with user-provided arguments or derived data.
     ValidationError(String),
+    /// Indicates a path outside the directory owned by ssv.
+    OutsideManagedRoot(PathBuf),
     /// A spawned command exited with a non-zero status code.
     CommandFailed {
         program: String,
@@ -27,6 +30,9 @@ impl Display for AppError {
             AppError::ConfigError(message) => write!(f, "{message}"),
             AppError::HostNotFound(host) => write!(f, "Host '{host}' was not found"),
             AppError::ValidationError(message) => write!(f, "{message}"),
+            AppError::OutsideManagedRoot(path) => {
+                write!(f, "Path '{}' is outside the managed SSH directory", path.display())
+            }
             AppError::CommandFailed { program, status } => {
                 write!(f, "Command '{program}' exited with status {status}")
             }
@@ -41,6 +47,7 @@ impl Error for AppError {
             AppError::ConfigError(_)
             | AppError::HostNotFound(_)
             | AppError::ValidationError(_)
+            | AppError::OutsideManagedRoot(_)
             | AppError::CommandFailed { .. } => None,
         }
     }
@@ -53,25 +60,15 @@ impl From<io::Error> for AppError {
 }
 
 impl AppError {
-    pub(crate) fn config_error<S: Into<String>>(message: S) -> Self {
+    pub(crate) fn config<S: Into<String>>(message: S) -> Self {
         AppError::ConfigError(message.into())
     }
 
-    pub(crate) fn validation_error<S: Into<String>>(message: S) -> Self {
+    pub(crate) fn validation<S: Into<String>>(message: S) -> Self {
         AppError::ValidationError(message.into())
     }
 
     pub(crate) fn command_failed(program: &str, status: ExitStatus) -> Self {
         AppError::CommandFailed { program: program.to_string(), status }
-    }
-
-    /// Provide an `io::ErrorKind`-like view for callers expecting legacy behavior.
-    pub fn kind(&self) -> io::ErrorKind {
-        match self {
-            AppError::Io(err) => err.kind(),
-            AppError::ConfigError(_) | AppError::ValidationError(_) => io::ErrorKind::InvalidInput,
-            AppError::HostNotFound(_) => io::ErrorKind::NotFound,
-            AppError::CommandFailed { .. } => io::ErrorKind::Other,
-        }
     }
 }

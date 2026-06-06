@@ -1,0 +1,44 @@
+use crate::harness::TestContext;
+use serial_test::serial;
+use ssv::{generate, list, remove, show};
+use std::fs;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+#[test]
+#[serial]
+fn managed_host_lifecycle_uses_public_api() {
+    let context = TestContext::new();
+
+    let generated = generate("flow.test", "ed25519", None, None).expect("generate should succeed");
+    assert_eq!(show("flow.test").expect("show should succeed"), generated);
+    assert_eq!(list().expect("list should succeed"), vec!["flow.test"]);
+
+    remove("flow.test").expect("remove should succeed");
+    assert!(!context.host_config("flow.test").exists());
+    assert!(!context.private_key("ed25519", "flow.test").exists());
+}
+
+#[test]
+#[serial]
+#[cfg(unix)]
+fn generate_removes_artifacts_when_public_key_read_fails() {
+    let context = TestContext::new();
+    let keygen = context.home().join("private-only-keygen");
+    fs::write(
+        &keygen,
+        "#!/usr/bin/env sh\nset -eu\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-f\" ]; then\n    shift\n    outfile=\"$1\"\n  fi\n  shift\ndone\nprintf 'PRIVATE-ed25519\\n' > \"$outfile\"\n",
+    )
+    .expect("keygen should be written");
+    let mut permissions = fs::metadata(&keygen).expect("keygen metadata").permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&keygen, permissions).expect("keygen should be executable");
+    unsafe { std::env::set_var("SSV_SSH_KEYGEN_PATH", keygen) };
+
+    assert!(generate("rollback.test", "ed25519", None, None).is_err());
+
+    assert!(!context.host_config("rollback.test").exists());
+    assert!(!context.private_key("ed25519", "rollback.test").exists());
+    assert!(!context.public_key("ed25519", "rollback.test").exists());
+}
