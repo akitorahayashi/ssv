@@ -4,12 +4,12 @@
 
 ## Features
 
-- Secure bootstrap: `ssv init` ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
-- Key generation: `ssv generate` wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
-- Inventory awareness: `ssv list` scans managed configs and shows the hostnames under management.
-- Public key lookup: `ssv show <HOST>` prints the public key referenced by a managed host config.
-- Read-only audit: `ssv audit` reports missing assets, unsafe permissions, key mismatches, and other inconsistencies without modifying files.
-- Safe teardown: `ssv remove` deletes only the key pair referenced by the managed host config.
+- Secure bootstrap: `ssv init` (alias: `i`) ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
+- Key generation: `ssv generate` (alias: `g`) wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
+- Inventory awareness: `ssv list` (alias: `ls`) scans managed configs and shows the hostnames under management.
+- Public key lookup: `ssv show <HOST>` (alias: `sw`) prints the public key referenced by a managed host config.
+- Read-only audit: `ssv audit` (alias: `au`) reports missing assets, unsafe permissions, key mismatches, and other inconsistencies without modifying files.
+- Safe teardown: `ssv remove` (alias: `rm`) deletes only the key pair referenced by the managed host config.
 - Agentless: generated configurations use explicit `IdentityFile` paths, so `ssh-agent` and reboots are not required.
 
 ## Setup
@@ -41,6 +41,17 @@ ssv audit
 # Remove keys/config for github.com
 ssv remove --host github.com
 ```
+
+All subcommands support short aliases for convenience:
+
+| Subcommand | Alias | Description |
+| --- | --- | --- |
+| init | i | Bootstrap the SSH configuration layout |
+| generate | g | Generate a key pair and host configuration file |
+| list | ls | List managed hosts |
+| remove | rm | Remove key pairs and configuration for a host |
+| show | sw | Print the public key for a managed host |
+| audit | au | Inspect managed SSH assets without modifying them |
 
 Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `--type`, `--user`, and `--port` flags let you customise the generated configuration.
 
