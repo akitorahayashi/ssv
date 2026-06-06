@@ -20,7 +20,10 @@ pub(crate) fn execute(
 
     let (private, public) = layout.key_pair(key_type, host);
     let config = layout.host_config(host);
-    if private.exists() || public.exists() || config.exists() {
+    if layout.artifact_exists(&private)?
+        || layout.artifact_exists(&public)?
+        || layout.artifact_exists(&config)?
+    {
         return Err(AppError::validation(format!(
             "artifacts for host '{host}' already exist; remove them before regenerating"
         )));

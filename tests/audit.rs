@@ -8,5 +8,7 @@ mod healthy_environment;
 mod identity_mismatch;
 #[path = "audit/missing_assets.rs"]
 mod missing_assets;
+#[path = "audit/orphaned_assets.rs"]
+mod orphaned_assets;
 #[path = "audit/permissions.rs"]
 mod permissions;

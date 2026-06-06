@@ -33,6 +33,7 @@ pub enum AuditCode {
     InvalidFileType,
     ConfigParse,
     OutsideManagedRoot,
+    UnmanagedIdentity,
     KeyMismatch,
     OrphanedAsset,
     ReadFailure,
@@ -50,6 +51,7 @@ impl Display for AuditCode {
             Self::InvalidFileType => "invalid-file-type",
             Self::ConfigParse => "config-parse",
             Self::OutsideManagedRoot => "outside-managed-root",
+            Self::UnmanagedIdentity => "unmanaged-identity",
             Self::KeyMismatch => "key-mismatch",
             Self::OrphanedAsset => "orphaned-asset",
             Self::ReadFailure => "read-failure",
@@ -201,6 +203,14 @@ impl Audit {
                 return;
             }
         };
+        let Some(host) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            self.report.error(AuditCode::ConfigParse, path, "host config has no UTF-8 filename");
+            return;
+        };
+        if let Err(error) = self.layout.require_host_identity(&config.identity, host) {
+            self.report.error(AuditCode::UnmanagedIdentity, path, error.to_string());
+            return;
+        }
         self.referenced_keys.insert(config.identity.clone());
         self.inspect_private_key(&config.identity);
     }
@@ -265,13 +275,7 @@ impl Audit {
                     continue;
                 }
             };
-            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if filename.starts_with("id_")
-                && !filename.ends_with(".pub")
-                && !self.referenced_keys.contains(&path)
-            {
+            if Layout::is_managed_key_candidate(&path) && !self.referenced_keys.contains(&path) {
                 self.report.warning(
                     AuditCode::OrphanedAsset,
                     &path,

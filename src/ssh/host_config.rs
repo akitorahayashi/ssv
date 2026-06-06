@@ -50,7 +50,7 @@ pub(crate) fn has_managed_include(contents: &str) -> bool {
                 top_level = false;
             } else if top_level
                 && name.eq_ignore_ascii_case("Include")
-                && value.split_whitespace().any(|path| path == "~/.ssh/conf.d/*.conf")
+                && value.split_whitespace().any(|path| unquote(path) == "~/.ssh/conf.d/*.conf")
             {
                 return true;
             }
@@ -78,6 +78,7 @@ mod tests {
     #[test]
     fn include_must_be_top_level() {
         assert!(has_managed_include("Include ~/.ssh/conf.d/*.conf\nHost example\n"));
+        assert!(has_managed_include("Include \"~/.ssh/conf.d/*.conf\"\nHost example\n"));
         assert!(!has_managed_include("Host example\nInclude ~/.ssh/conf.d/*.conf\n"));
     }
 }

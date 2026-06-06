@@ -17,6 +17,7 @@ pub(crate) fn execute(host: &str) -> Result<(), AppError> {
     }
     layout.require_regular_file(&config_path)?;
     let config = HostConfig::parse(&fs::read_to_string(&config_path)?, &layout)?;
+    layout.require_host_identity(&config.identity, host)?;
     let public = layout.public_key(&config.identity)?;
 
     fs::remove_file(config_path)?;

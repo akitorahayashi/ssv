@@ -54,6 +54,48 @@ impl Layout {
         Ok(private.with_file_name(filename))
     }
 
+    pub(crate) fn artifact_exists(&self, path: &Path) -> Result<bool, AppError> {
+        match fs::symlink_metadata(path) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub(crate) fn require_host_identity(&self, path: &Path, host: &str) -> Result<(), AppError> {
+        self.require_managed(path)?;
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| AppError::validation("IdentityFile has no UTF-8 filename"))?;
+        let Some(name) = filename.strip_prefix("id_") else {
+            return Err(unmanaged_identity(path, host));
+        };
+        let Some((key_type, identity_host)) = name.split_once('_') else {
+            return Err(unmanaged_identity(path, host));
+        };
+        if Self::validate_key_type(key_type).is_err() || identity_host != host {
+            return Err(unmanaged_identity(path, host));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn is_managed_key_candidate(path: &Path) -> bool {
+        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+            return false;
+        };
+        if filename.ends_with(".pub") || filename.ends_with("_sk") {
+            return false;
+        }
+        let Some(name) = filename.strip_prefix("id_") else {
+            return false;
+        };
+        let Some((key_type, host)) = name.split_once('_') else {
+            return false;
+        };
+        Self::validate_key_type(key_type).is_ok() && Self::validate_host(host).is_ok()
+    }
+
     pub(crate) fn prepare_for_generate(&self) -> Result<(), AppError> {
         self.ensure_bootstrap()
     }
@@ -150,16 +192,38 @@ impl Layout {
     }
 
     fn prepare_dir(&self, path: &Path) -> Result<(), AppError> {
-        fs::create_dir_all(path)?;
+        match fs::symlink_metadata(path) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => {
+                return Err(AppError::validation(format!(
+                    "refusing to prepare non-directory path '{}'",
+                    path.display()
+                )));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(path)?;
+            }
+            Err(error) => return Err(error.into()),
+        }
         permissions::set_mode(path, permissions::DIRECTORY_MODE)
     }
 
     fn ensure_main_config_include(&self) -> Result<(), AppError> {
         let path = self.config();
-        if !path.exists() {
-            fs::write(&path, format!("{MANAGED_INCLUDE_LINE}\n"))?;
-            permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
-            return Ok(());
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_file() => {}
+            Ok(_) => {
+                return Err(AppError::validation(format!(
+                    "refusing to prepare non-file path '{}'",
+                    path.display()
+                )));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::write(&path, format!("{MANAGED_INCLUDE_LINE}\n"))?;
+                permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
+                return Ok(());
+            }
+            Err(error) => return Err(error.into()),
         }
 
         let contents = fs::read_to_string(&path)?;
@@ -177,6 +241,13 @@ impl Layout {
         fs::write(&path, updated)?;
         permissions::set_mode(&path, permissions::PRIVATE_MODE)
     }
+}
+
+fn unmanaged_identity(path: &Path, host: &str) -> AppError {
+    AppError::validation(format!(
+        "refusing to manage identity '{}' because it does not match host '{host}'",
+        path.display()
+    ))
 }
 
 fn is_symlink_if_present(path: &Path) -> Result<bool, AppError> {
@@ -236,5 +307,27 @@ mod tests {
         layout.ensure_bootstrap().expect("bootstrap should remain idempotent");
         let config = fs::read_to_string(layout.config()).expect("config should exist");
         assert_eq!(config.matches("~/.ssh/conf.d/*.conf").count(), 1);
+    }
+
+    #[test]
+    fn quoted_include_is_not_duplicated() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let layout = Layout { home: temp.path().to_path_buf() };
+        layout.prepare_dir(&layout.root()).expect("root should exist");
+        layout.prepare_dir(&layout.hosts()).expect("hosts should exist");
+        fs::write(layout.config(), "Include \"~/.ssh/conf.d/*.conf\"\n")
+            .expect("config should be written");
+
+        layout.ensure_bootstrap().expect("bootstrap should succeed");
+
+        let config = fs::read_to_string(layout.config()).expect("config should exist");
+        assert_eq!(config.matches("~/.ssh/conf.d/*.conf").count(), 1);
+    }
+
+    #[test]
+    fn managed_key_candidates_exclude_standard_keys() {
+        assert!(!Layout::is_managed_key_candidate(Path::new("id_ed25519")));
+        assert!(!Layout::is_managed_key_candidate(Path::new("id_ed25519_sk")));
+        assert!(Layout::is_managed_key_candidate(Path::new("id_ed25519_github.com")));
     }
 }
