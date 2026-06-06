@@ -2,10 +2,15 @@ name: Build
 
 on:
   workflow_call:
+    inputs:
+      release_id:
+        required: false
+        type: string
 
 jobs:
   build-debug:
     name: Build debug binary
+    if: "!startsWith(github.ref, 'refs/tags/')"
     runs-on: ubuntu-latest
 
     steps:
@@ -14,13 +19,32 @@ jobs:
 
       - name: Setup Rust Environment
         uses: ./.github/actions/setup
+        with:
+          rust-version: 1.90.0
 
       - name: Build debug binary
         run: cargo build
 
   build-release:
     name: Build release binary
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: ssv-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: ssv-linux-aarch64
+            cross: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: ssv-darwin-x86_64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: ssv-darwin-aarch64
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
@@ -28,6 +52,35 @@ jobs:
 
       - name: Setup Rust Environment
         uses: ./.github/actions/setup
+        with:
+          rust-version: 1.90.0
 
-      - name: Build release binary
-        run: cargo build --release
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install cross (for cross-compilation)
+        if: matrix.cross
+        run: cargo install cross --version 0.2.5 --locked
+
+      - name: Build release binary (native)
+        if: '!matrix.cross'
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build release binary (cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: |
+          cp target/${{ matrix.target }}/release/ssv ${{ matrix.artifact }}
+          chmod +x ${{ matrix.artifact }}
+
+      - name: Upload release asset
+        if: inputs.release_id != ''
+        uses: akitorahayashi/gh-release@v1
+        with:
+          mode: upload
+          token: ${{ github.token }}
+          release_id: ${{ inputs.release_id }}
+          files: ${{ matrix.artifact }}
+          overwrite: true
