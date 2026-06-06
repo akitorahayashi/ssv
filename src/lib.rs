@@ -1,12 +1,13 @@
-//! Library entry point exposing the core command handlers for `ssv`.
+//! Library entry point exposing the application operations for `ssv`.
 
-mod commands;
+mod app;
+mod cli;
 pub mod error;
-mod ssh_paths;
+mod ssh;
 
-use commands::{generate_host::GenerateHost, list_hosts::ListHosts, remove_host::RemoveHost};
-use error::AppError;
-use ssh_paths::SshPaths;
+pub use app::audit::{AuditCode, AuditFinding, AuditReport, AuditSeverity};
+pub use cli::run as cli;
+pub use error::AppError;
 
 /// Generate a new SSH key pair and configuration for the provided host.
 pub fn generate(
@@ -15,26 +16,25 @@ pub fn generate(
     user: Option<&str>,
     port: Option<u16>,
 ) -> Result<String, AppError> {
-    let paths = SshPaths::from_env()?;
-    let command = GenerateHost { host, key_type, user, port };
-    command.execute(&paths)
+    app::generate::execute(host, key_type, user, port)
 }
 
 /// List all managed hosts underneath ~/.ssh/conf.d.
 pub fn list() -> Result<Vec<String>, AppError> {
-    let paths = SshPaths::from_env()?;
-    paths.ensure_base_dirs()?;
-
-    let command = ListHosts;
-    command.execute(&paths)
+    app::list::execute()
 }
 
 /// Remove the key pair and configuration associated with a host.
 pub fn remove(host: &str) -> Result<(), AppError> {
-    let paths = SshPaths::from_env()?;
-    let command = RemoveHost { host };
-    command.execute(&paths)?;
+    app::remove::execute(host)
+}
 
-    println!("🗑️  Removed SSH assets for '{host}'");
-    Ok(())
+/// Return the public key associated with a managed host.
+pub fn show(host: &str) -> Result<String, AppError> {
+    app::show::execute(host)
+}
+
+/// Inspect managed SSH assets without modifying them.
+pub fn audit() -> Result<AuditReport, AppError> {
+    app::audit::execute()
 }
