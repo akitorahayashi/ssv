@@ -20,9 +20,10 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Ensure ~/.ssh, ~/.ssh/conf.d, and ~/.ssh/config are ready for ssv-managed hosts
+    #[command(visible_alias = "i")]
     Init,
     /// Generate a key pair and host configuration file
-    #[command(visible_alias = "gen")]
+    #[command(visible_alias = "g")]
     Generate {
         /// Hostname to manage
         #[arg(long, value_name = "HOST")]
@@ -48,8 +49,10 @@ enum Commands {
         host: String,
     },
     /// Print the public key for a managed host
+    #[command(visible_alias = "sw")]
     Show { host: String },
     /// Inspect managed SSH assets without modifying them
+    #[command(visible_alias = "au")]
     Audit,
 }
 
