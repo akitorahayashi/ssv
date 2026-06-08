@@ -27,7 +27,7 @@ ssv init
 ssv init
 
 # Generate keys/config for github.com
-ssv generate --host github.com --user git
+ssv generate github.com -u git
 
 # List all managed hosts
 ssv list
@@ -39,7 +39,7 @@ ssv show github.com
 ssv audit
 
 # Remove keys/config for github.com
-ssv remove --host github.com
+ssv remove github.com
 ```
 
 All subcommands support short aliases for convenience:
@@ -53,24 +53,28 @@ All subcommands support short aliases for convenience:
 | show | sw | Print the public key for a managed host |
 | audit | au | Inspect managed SSH assets without modifying them |
 
-Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `--type`, `--user`, and `--port` flags let you customise the generated configuration.
+Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `-t/--type`, `-u/--user`, `-p/--port`, and `-n/--hostname` flags let you customise the generated configuration.
 
 `list`, `show`, and `audit` are read-only. `audit` writes findings to standard error and exits non-zero when error-level findings exist.
 
-## Development
+### Managing Multiple Accounts
+
+You can use `ssv` to manage multiple accounts for the same service (e.g., personal and work GitHub accounts) by keeping your main account as the default domain and creating an alias for your secondary account.
 
 ```bash
-cargo build         # debug build
-cargo build --release
-cargo fmt
-cargo clippy --all-targets --all-features -- -D warnings
-RUST_TEST_THREADS=1 cargo test --all-targets --all-features
+# Personal (Main account): Use the standard domain
+ssv generate github.com -u git
+
+# Work (Sub account): Create an alias and specify the HostName
+ssv generate github.com-w -n github.com -u git
 ```
 
-### Testing
+When cloning repositories, use the standard URL for your personal account, and replace the domain with the alias for your work account:
 
-Integration tests in `tests/` exercise the CLI and library API with a stubbed `ssh-keygen`. They rely on `serial_test` because the fixtures manipulate the `HOME` environment variable. Run the full suite with `RUST_TEST_THREADS=1 cargo test --all-targets --all-features` before committing changes.
+```bash
+# Personal
+git clone git@github.com:username/repo.git
 
-## License
-
-This project is distributed under the MIT license.
+# Work
+git clone git@github.com-w:orgname/repo.git
+```

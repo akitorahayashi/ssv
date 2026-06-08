@@ -6,8 +6,8 @@ use serial_test::serial;
 #[serial]
 fn list_outputs_managed_hosts() {
     let context = TestContext::new();
-    context.cli().args(["generate", "--host", "alpha.test"]).assert().success();
-    context.cli().args(["generate", "--host", "beta.test"]).assert().success();
+    context.cli().args(["generate", "alpha.test"]).assert().success();
+    context.cli().args(["generate", "beta.test"]).assert().success();
 
     context
         .cli()

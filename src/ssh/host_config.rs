@@ -25,11 +25,12 @@ impl HostConfig {
 
     pub(crate) fn render(
         host: &str,
+        hostname: &str,
         key_type: &str,
         user: Option<&str>,
         port: Option<u16>,
     ) -> String {
-        let mut contents = format!("Host {host}\nHostName {host}\n");
+        let mut contents = format!("Host {host}\nHostName {hostname}\n");
         if let Some(user) = user {
             contents.push_str(&format!("User {user}\n"));
         }

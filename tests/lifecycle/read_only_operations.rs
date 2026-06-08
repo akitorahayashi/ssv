@@ -31,7 +31,7 @@ fn list_surfaces_permission_errors() {
 #[serial]
 fn show_and_audit_do_not_repair_permissions() {
     let context = TestContext::new();
-    generate("readonly.test", "ed25519", None, None).expect("generate should succeed");
+    generate("readonly.test", None, "ed25519", None, None).expect("generate should succeed");
     context.prepare_include();
     context.set_mode(&context.private_key("ed25519", "readonly.test"), 0o644);
 

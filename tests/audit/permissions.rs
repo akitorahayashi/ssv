@@ -7,7 +7,7 @@ use ssv::{AuditCode, AuditSeverity, audit, generate};
 #[cfg(unix)]
 fn unsafe_and_non_standard_permissions_are_distinguished() {
     let context = TestContext::new();
-    generate("permissions.test", "ed25519", None, None).expect("generate should succeed");
+    generate("permissions.test", None, "ed25519", None, None).expect("generate should succeed");
     context.prepare_include();
     context.set_mode(&context.private_key("ed25519", "permissions.test"), 0o644);
     context.set_mode(&context.host_config("permissions.test"), 0o400);

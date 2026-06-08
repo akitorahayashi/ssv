@@ -11,7 +11,8 @@ use std::os::unix::fs::PermissionsExt;
 fn managed_host_lifecycle_uses_public_api() {
     let context = TestContext::new();
 
-    let generated = generate("flow.test", "ed25519", None, None).expect("generate should succeed");
+    let generated =
+        generate("flow.test", None, "ed25519", None, None).expect("generate should succeed");
     assert_eq!(show("flow.test").expect("show should succeed"), generated);
     assert_eq!(list().expect("list should succeed"), vec!["flow.test"]);
 
@@ -36,7 +37,7 @@ fn generate_removes_artifacts_when_public_key_read_fails() {
     fs::set_permissions(&keygen, permissions).expect("keygen should be executable");
     unsafe { std::env::set_var("SSV_SSH_KEYGEN_PATH", keygen) };
 
-    assert!(generate("rollback.test", "ed25519", None, None).is_err());
+    assert!(generate("rollback.test", None, "ed25519", None, None).is_err());
 
     assert!(!context.host_config("rollback.test").exists());
     assert!(!context.private_key("ed25519", "rollback.test").exists());

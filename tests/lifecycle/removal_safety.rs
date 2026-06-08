@@ -7,7 +7,7 @@ use std::fs;
 #[serial]
 fn remove_missing_host_does_not_guess_key_names() {
     let context = TestContext::new();
-    generate("foo.bar.com", "ed25519", None, None).expect("generate should succeed");
+    generate("foo.bar.com", None, "ed25519", None, None).expect("generate should succeed");
 
     assert!(remove("bar.com").is_err());
     assert!(context.private_key("ed25519", "foo.bar.com").exists());
@@ -34,7 +34,7 @@ fn remove_refuses_identity_not_owned_by_host() {
 #[serial]
 fn remove_removes_host_definition_before_key_cleanup_failure() {
     let context = TestContext::new();
-    generate("retry.test", "ed25519", None, None).expect("generate should succeed");
+    generate("retry.test", None, "ed25519", None, None).expect("generate should succeed");
     fs::remove_file(context.public_key("ed25519", "retry.test"))
         .expect("public key should be removed");
     fs::create_dir(context.public_key("ed25519", "retry.test"))

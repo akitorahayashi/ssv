@@ -5,7 +5,7 @@ use serial_test::serial;
 #[serial]
 fn show_outputs_only_public_key() {
     let context = TestContext::new();
-    context.cli().args(["generate", "--host", "show.test"]).assert().success();
+    context.cli().args(["generate", "show.test"]).assert().success();
 
     context
         .cli()
