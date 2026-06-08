@@ -57,20 +57,24 @@ Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow t
 
 `list`, `show`, and `audit` are read-only. `audit` writes findings to standard error and exits non-zero when error-level findings exist.
 
-## Development
+### Managing Multiple Accounts
+
+You can use `ssv` to manage multiple accounts for the same service (e.g., personal and work GitHub accounts) by keeping your main account as the default domain and creating an alias for your secondary account.
 
 ```bash
-cargo build         # debug build
-cargo build --release
-cargo fmt
-cargo clippy --all-targets --all-features -- -D warnings
-RUST_TEST_THREADS=1 cargo test --all-targets --all-features
+# Personal (Main account): Use the standard domain
+ssv generate github.com -u git
+
+# Work (Sub account): Create an alias and specify the HostName
+ssv generate github.com-w -n github.com -u git
 ```
 
-### Testing
+When cloning repositories, use the standard URL for your personal account, and replace the domain with the alias for your work account:
 
-Integration tests in `tests/` exercise the CLI and library API with a stubbed `ssh-keygen`. They rely on `serial_test` because the fixtures manipulate the `HOME` environment variable. Run the full suite with `RUST_TEST_THREADS=1 cargo test --all-targets --all-features` before committing changes.
+```bash
+# Personal
+git clone git@github.com:username/repo.git
 
-## License
-
-This project is distributed under the MIT license.
+# Work
+git clone git@github.com-w:orgname/repo.git
+```
