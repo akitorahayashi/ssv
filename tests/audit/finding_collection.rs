@@ -7,8 +7,8 @@ use std::fs;
 #[serial]
 fn audit_collects_findings_across_assets() {
     let context = TestContext::new();
-    generate("first.test", "ed25519", None, None).expect("first generate should succeed");
-    generate("second.test", "ed25519", None, None).expect("second generate should succeed");
+    generate("first.test", None, "ed25519", None, None).expect("first generate should succeed");
+    generate("second.test", None, "ed25519", None, None).expect("second generate should succeed");
     fs::remove_file(context.public_key("ed25519", "first.test")).expect("public key removed");
     fs::remove_file(context.private_key("ed25519", "second.test")).expect("private key removed");
 

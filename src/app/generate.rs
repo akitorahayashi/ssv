@@ -9,6 +9,7 @@ use std::path::Path;
 
 pub(crate) fn execute(
     host: &str,
+    hostname: Option<&str>,
     key_type: &str,
     user: Option<&str>,
     port: Option<u16>,
@@ -29,10 +30,12 @@ pub(crate) fn execute(
         )));
     }
 
+    let target_hostname = hostname.unwrap_or(host);
+
     keygen::generate(key_type, &private)?;
     let result = (|| {
         permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
-        write_config(&config, &HostConfig::render(host, key_type, user, port))?;
+        write_config(&config, &HostConfig::render(host, target_hostname, key_type, user, port))?;
         Ok(fs::read_to_string(&public)?)
     })();
     match result {

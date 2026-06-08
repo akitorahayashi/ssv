@@ -19,11 +19,12 @@ pub fn init() -> Result<BootstrapStatus, AppError> {
 /// Generate a new SSH key pair and configuration for the provided host.
 pub fn generate(
     host: &str,
+    hostname: Option<&str>,
     key_type: &str,
     user: Option<&str>,
     port: Option<u16>,
 ) -> Result<String, AppError> {
-    app::generate::execute(host, key_type, user, port)
+    app::generate::execute(host, hostname, key_type, user, port)
 }
 
 /// List all managed hosts underneath ~/.ssh/conf.d.

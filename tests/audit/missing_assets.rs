@@ -7,7 +7,7 @@ use std::fs;
 #[serial]
 fn missing_public_key_is_reported() {
     let context = TestContext::new();
-    generate("missing.test", "ed25519", None, None).expect("generate should succeed");
+    generate("missing.test", None, "ed25519", None, None).expect("generate should succeed");
     context.prepare_include();
     fs::remove_file(context.public_key("ed25519", "missing.test")).expect("public key removed");
 

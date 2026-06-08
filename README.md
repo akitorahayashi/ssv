@@ -27,7 +27,7 @@ ssv init
 ssv init
 
 # Generate keys/config for github.com
-ssv generate --host github.com --user git
+ssv generate github.com -u git
 
 # List all managed hosts
 ssv list
@@ -39,7 +39,7 @@ ssv show github.com
 ssv audit
 
 # Remove keys/config for github.com
-ssv remove --host github.com
+ssv remove github.com
 ```
 
 All subcommands support short aliases for convenience:
@@ -53,7 +53,7 @@ All subcommands support short aliases for convenience:
 | show | sw | Print the public key for a managed host |
 | audit | au | Inspect managed SSH assets without modifying them |
 
-Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `--type`, `--user`, and `--port` flags let you customise the generated configuration.
+Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `-t/--type`, `-u/--user`, `-p/--port`, and `-n/--hostname` flags let you customise the generated configuration.
 
 `list`, `show`, and `audit` are read-only. `audit` writes findings to standard error and exits non-zero when error-level findings exist.
 

@@ -25,17 +25,20 @@ enum Commands {
     /// Generate a key pair and host configuration file
     #[command(visible_alias = "g")]
     Generate {
-        /// Hostname to manage
-        #[arg(long, value_name = "HOST")]
+        /// Host identifier to manage
+        #[arg(value_name = "HOST_ID")]
         host: String,
+        /// HostName override for SSH config
+        #[arg(short = 'n', long = "hostname", value_name = "HOSTNAME")]
+        hostname: Option<String>,
         /// Key type to generate
-        #[arg(long = "type", default_value = "ed25519", value_name = "TYPE")]
+        #[arg(short = 't', long = "type", default_value = "ed25519", value_name = "TYPE")]
         key_type: String,
         /// Optional user override for SSH config
-        #[arg(long, value_name = "USER")]
+        #[arg(short = 'u', long, value_name = "USER")]
         user: Option<String>,
         /// Optional port override for SSH config
-        #[arg(long, value_name = "PORT")]
+        #[arg(short = 'p', long, value_name = "PORT")]
         port: Option<u16>,
     },
     /// List managed hosts
@@ -45,7 +48,7 @@ enum Commands {
     #[command(visible_alias = "rm")]
     Remove {
         /// Hostname to remove
-        #[arg(long, value_name = "HOST")]
+        #[arg(value_name = "HOST")]
         host: String,
     },
     /// Print the public key for a managed host
@@ -59,8 +62,8 @@ enum Commands {
 pub fn run() {
     let result = match Cli::parse().command {
         Commands::Init => init::run(),
-        Commands::Generate { host, key_type, user, port } => {
-            generate::run(&host, &key_type, user.as_deref(), port)
+        Commands::Generate { host, hostname, key_type, user, port } => {
+            generate::run(&host, hostname.as_deref(), &key_type, user.as_deref(), port)
         }
         Commands::List => list::run(),
         Commands::Remove { host } => remove::run(&host),
