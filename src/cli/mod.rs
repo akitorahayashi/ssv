@@ -47,7 +47,7 @@ enum Commands {
     /// Remove key pairs and configuration for a host
     #[command(visible_alias = "rm")]
     Remove {
-        /// Hostname to remove
+        /// Host identifier to remove
         #[arg(value_name = "HOST")]
         host: String,
     },

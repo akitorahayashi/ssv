@@ -15,6 +15,9 @@ pub(crate) fn execute(
     port: Option<u16>,
 ) -> Result<String, AppError> {
     Layout::validate_host(host)?;
+    if let Some(hn) = hostname {
+        validate_hostname(hn)?;
+    }
     Layout::validate_key_type(key_type)?;
     let layout = Layout::from_env()?;
     layout.prepare_for_generate()?;
@@ -58,4 +61,18 @@ fn remove_generated_artifacts<const N: usize>(paths: [&Path; N]) {
     for path in paths {
         let _ = fs::remove_file(path);
     }
+}
+
+fn validate_hostname(hostname: &str) -> Result<(), AppError> {
+    if hostname.is_empty() {
+        return Err(AppError::validation("hostname must not be empty"));
+    }
+    let allowed =
+        |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '[' | ']' | ':');
+    if !hostname.chars().all(allowed) {
+        return Err(AppError::validation(format!(
+            "invalid hostname '{hostname}'; allowed characters are alphanumeric, '.', '-', '_', '[', ']', ':'"
+        )));
+    }
+    Ok(())
 }

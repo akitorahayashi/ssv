@@ -17,6 +17,10 @@ pub fn init() -> Result<BootstrapStatus, AppError> {
 }
 
 /// Generate a new SSH key pair and configuration for the provided host.
+///
+/// `hostname` is an optional override for the SSH `HostName` directive. When `None`, the
+/// `HostName` in the generated config defaults to `host`. The key pair and config file are
+/// always named after `host`, regardless of the `hostname` override.
 pub fn generate(
     host: &str,
     hostname: Option<&str>,

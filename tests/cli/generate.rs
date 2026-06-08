@@ -39,6 +39,27 @@ fn generate_with_custom_hostname() {
     assert!(config_content.contains("Host github-custom"));
     assert!(config_content.contains("HostName github.com"));
     assert!(config_content.contains("User git"));
+    assert!(config_content.contains("IdentityFile"));
+    assert!(config_content.contains("github-custom"));
+}
+
+#[test]
+#[serial]
+fn generate_rejects_hostname_with_newline() {
+    let context = TestContext::new();
+
+    context
+        .cli()
+        .args([
+            "generate",
+            "github-inject",
+            "-n",
+            "github.com\nProxyCommand malicious",
+            "-u",
+            "git",
+        ])
+        .assert()
+        .failure();
 }
 
 #[test]
