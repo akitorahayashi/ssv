@@ -8,6 +8,8 @@ mod generate;
 mod help_and_version;
 #[path = "cli/init.rs"]
 mod init;
+#[path = "cli/link.rs"]
+mod link;
 #[path = "cli/list.rs"]
 mod list;
 #[path = "cli/remove.rs"]

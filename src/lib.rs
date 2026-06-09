@@ -46,6 +46,11 @@ pub fn show(host: &str) -> Result<String, AppError> {
     app::show::execute(host)
 }
 
+/// Link a repository to a managed host.
+pub fn link(host: &str) -> Result<String, AppError> {
+    app::link::execute(host)
+}
+
 /// Inspect managed SSH assets without modifying them.
 pub fn audit() -> Result<AuditReport, AppError> {
     app::audit::execute()
