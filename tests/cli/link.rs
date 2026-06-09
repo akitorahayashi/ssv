@@ -1,8 +1,9 @@
 use crate::harness::TestContext;
+use git2::Repository;
 use predicates::prelude::*;
 use serial_test::serial;
 use std::fs;
-use std::process::Command;
+use std::path::Path;
 
 #[test]
 #[serial]
@@ -14,19 +15,10 @@ fn link_updates_remote_url_from_ssh() {
     context.cli().arg("init").assert().success();
     context.cli().arg("generate").arg(host).assert().success();
 
-    // Setup git repo
+    // Setup repository
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
-
-    Command::new("git").arg("init").current_dir(&repo_dir).status().unwrap();
-    Command::new("git")
-        .arg("remote")
-        .arg("add")
-        .arg("origin")
-        .arg("git@github.com:org/repo.git")
-        .current_dir(&repo_dir)
-        .status()
-        .unwrap();
+    init_repository_with_origin(&repo_dir, "git@github.com:org/repo.git");
 
     // Run ssv link
     context
@@ -39,16 +31,7 @@ fn link_updates_remote_url_from_ssh() {
         .stdout(predicate::str::contains(format!("Linked repository to '{host}'")))
         .stdout(predicate::str::contains(format!("new remote URL: git@{host}:org/repo.git")));
 
-    // Verify git remote
-    let output = Command::new("git")
-        .arg("remote")
-        .arg("get-url")
-        .arg("origin")
-        .current_dir(&repo_dir)
-        .output()
-        .unwrap();
-    let url = String::from_utf8(output.stdout).unwrap();
-    assert_eq!(url.trim(), format!("git@{host}:org/repo.git"));
+    assert_eq!(origin_url(&repo_dir), format!("git@{host}:org/repo.git"));
 }
 
 #[test]
@@ -61,19 +44,10 @@ fn link_updates_remote_url_from_https() {
     context.cli().arg("init").assert().success();
     context.cli().arg("generate").arg(host).assert().success();
 
-    // Setup git repo
+    // Setup repository
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
-
-    Command::new("git").arg("init").current_dir(&repo_dir).status().unwrap();
-    Command::new("git")
-        .arg("remote")
-        .arg("add")
-        .arg("origin")
-        .arg("https://github.com/org/repo.git")
-        .current_dir(&repo_dir)
-        .status()
-        .unwrap();
+    init_repository_with_origin(&repo_dir, "https://github.com/org/repo.git");
 
     // Run ssv link
     context
@@ -86,16 +60,7 @@ fn link_updates_remote_url_from_https() {
         .stdout(predicate::str::contains(format!("Linked repository to '{host}'")))
         .stdout(predicate::str::contains(format!("new remote URL: git@{host}:org/repo.git")));
 
-    // Verify git remote
-    let output = Command::new("git")
-        .arg("remote")
-        .arg("get-url")
-        .arg("origin")
-        .current_dir(&repo_dir)
-        .output()
-        .unwrap();
-    let url = String::from_utf8(output.stdout).unwrap();
-    assert_eq!(url.trim(), format!("git@{host}:org/repo.git"));
+    assert_eq!(origin_url(&repo_dir), format!("git@{host}:org/repo.git"));
 }
 
 #[test]
@@ -106,15 +71,7 @@ fn link_fails_if_host_not_found() {
 
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
-    Command::new("git").arg("init").current_dir(&repo_dir).status().unwrap();
-    Command::new("git")
-        .arg("remote")
-        .arg("add")
-        .arg("origin")
-        .arg("git@github.com:org/repo.git")
-        .current_dir(&repo_dir)
-        .status()
-        .unwrap();
+    init_repository_with_origin(&repo_dir, "git@github.com:org/repo.git");
 
     context
         .cli()
@@ -137,14 +94,9 @@ fn link_fails_if_not_git_repo() {
     let non_repo_dir = context.home().join("not-a-repo");
     fs::create_dir(&non_repo_dir).unwrap();
 
-    context
-        .cli()
-        .arg("link")
-        .arg(host)
-        .current_dir(&non_repo_dir)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("git remote get-url origin failed:"));
+    context.cli().arg("link").arg(host).current_dir(&non_repo_dir).assert().failure().stderr(
+        predicate::str::contains("Error: current directory is not inside a Git repository"),
+    );
 }
 
 #[test]
@@ -157,7 +109,7 @@ fn link_fails_if_no_origin_remote() {
 
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
-    Command::new("git").arg("init").current_dir(&repo_dir).status().unwrap();
+    Repository::init(&repo_dir).unwrap();
 
     context
         .cli()
@@ -166,7 +118,7 @@ fn link_fails_if_no_origin_remote() {
         .current_dir(&repo_dir)
         .assert()
         .failure()
-        .stderr(predicate::str::contains("git remote get-url origin failed:"));
+        .stderr(predicate::str::contains("Error: origin remote was not found"));
 }
 
 #[test]
@@ -179,19 +131,21 @@ fn link_fails_on_unsupported_url_format() {
 
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
-    Command::new("git").arg("init").current_dir(&repo_dir).status().unwrap();
-    Command::new("git")
-        .arg("remote")
-        .arg("add")
-        .arg("origin")
-        .arg("ftp://github.com/org/repo.git")
-        .current_dir(&repo_dir)
-        .status()
-        .unwrap();
+    init_repository_with_origin(&repo_dir, "ftp://github.com/org/repo.git");
 
     context.cli().arg("link").arg(host).current_dir(&repo_dir).assert().failure().stderr(
         predicate::str::contains(
             "Error: unsupported git remote URL format: ftp://github.com/org/repo.git",
         ),
     );
+}
+
+fn init_repository_with_origin(path: &Path, url: &str) {
+    let repository = Repository::init(path).unwrap();
+    repository.remote("origin", url).unwrap();
+}
+
+fn origin_url(path: &Path) -> String {
+    let repository = Repository::open(path).unwrap();
+    repository.find_remote("origin").unwrap().url().unwrap().to_string()
 }
