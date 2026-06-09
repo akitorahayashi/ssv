@@ -45,12 +45,9 @@ fn get_git_remote_url() -> Result<String, AppError> {
 fn extract_repo_path(url: &str) -> Result<String, AppError> {
     // SSH: git@github.com:org/repo.git
     if url.starts_with("git@") {
-        return url
-            .find(':')
-            .map(|colon_pos| url[colon_pos + 1..].to_string())
-            .ok_or_else(|| {
-                AppError::validation(format!("Error: unsupported git remote URL format: {url}"))
-            });
+        return url.find(':').map(|colon_pos| url[colon_pos + 1..].to_string()).ok_or_else(|| {
+            AppError::validation(format!("Error: unsupported git remote URL format: {url}"))
+        });
     }
 
     // HTTPS: https://github.com/org/repo.git
