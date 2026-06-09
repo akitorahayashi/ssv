@@ -1,6 +1,5 @@
 use crate::error::AppError;
 use crate::ssh::layout::Layout;
-use std::fs;
 use std::process::Command;
 
 pub(crate) fn execute(host: &str) -> Result<String, AppError> {
@@ -8,12 +7,8 @@ pub(crate) fn execute(host: &str) -> Result<String, AppError> {
     let layout = Layout::from_env()?;
     let config_path = layout.host_config(host);
 
-    match fs::symlink_metadata(&config_path) {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(AppError::HostNotFound(host.to_string()));
-        }
-        Err(error) => return Err(error.into()),
+    if !layout.artifact_exists(&config_path)? {
+        return Err(AppError::HostNotFound(host.to_string()));
     }
 
     let current_url = get_git_remote_url()?;
@@ -34,7 +29,11 @@ fn get_git_remote_url() -> Result<String, AppError> {
         .map_err(|_| AppError::config("Command 'git' not found"))?;
 
     if !output.status.success() {
-        return Err(AppError::command_failed("git", output.status));
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppError::validation(format!(
+            "git remote get-url origin failed: {}",
+            stderr.trim()
+        )));
     }
 
     String::from_utf8(output.stdout)
@@ -51,8 +50,7 @@ fn extract_repo_path(url: &str) -> Result<String, AppError> {
     }
 
     // HTTPS: https://github.com/org/repo.git
-    if url.starts_with("https://") {
-        let path_part = url.strip_prefix("https://").unwrap();
+    if let Some(path_part) = url.strip_prefix("https://") {
         if let Some(slash_pos) = path_part.find('/') {
             return Ok(path_part[slash_pos + 1..].to_string());
         }
