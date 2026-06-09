@@ -1,0 +1,62 @@
+use crate::error::AppError;
+use crate::ssh::layout::Layout;
+use git2::{ErrorCode, Repository};
+
+pub(crate) fn execute(host: &str) -> Result<String, AppError> {
+    Layout::validate_host(host)?;
+    let layout = Layout::from_env()?;
+    let config_path = layout.host_config(host);
+
+    if !layout.artifact_exists(&config_path)? {
+        return Err(AppError::HostNotFound(host.to_string()));
+    }
+
+    let repository = open_repository()?;
+    let current_url = origin_url(&repository)?;
+    let repo_path = extract_repo_path(&current_url)?;
+    let new_url = format!("git@{host}:{repo_path}");
+
+    repository.remote_set_url("origin", &new_url).map_err(|error| {
+        AppError::config(format!("failed to update origin remote URL: {error}"))
+    })?;
+
+    Ok(new_url)
+}
+
+fn open_repository() -> Result<Repository, AppError> {
+    Repository::discover(".").map_err(|error| match error.code() {
+        ErrorCode::NotFound => {
+            AppError::validation("current directory is not inside a Git repository")
+        }
+        _ => AppError::config(format!("failed to open Git repository: {error}")),
+    })
+}
+
+fn origin_url(repository: &Repository) -> Result<String, AppError> {
+    let remote = repository.find_remote("origin").map_err(|error| match error.code() {
+        ErrorCode::NotFound => AppError::validation("origin remote was not found"),
+        _ => AppError::config(format!("failed to read origin remote: {error}")),
+    })?;
+    remote
+        .url()
+        .map(str::to_owned)
+        .ok_or_else(|| AppError::validation("origin remote URL is missing or not valid UTF-8"))
+}
+
+fn extract_repo_path(url: &str) -> Result<String, AppError> {
+    // SSH: git@github.com:org/repo.git
+    if url.starts_with("git@") {
+        return url.find(':').map(|colon_pos| url[colon_pos + 1..].to_string()).ok_or_else(|| {
+            AppError::validation(format!("Error: unsupported git remote URL format: {url}"))
+        });
+    }
+
+    // HTTPS: https://github.com/org/repo.git
+    if let Some(path_part) = url.strip_prefix("https://")
+        && let Some(slash_pos) = path_part.find('/')
+    {
+        return Ok(path_part[slash_pos + 1..].to_string());
+    }
+
+    Err(AppError::validation(format!("Error: unsupported git remote URL format: {url}")))
+}

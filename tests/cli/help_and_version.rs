@@ -4,7 +4,7 @@ use serial_test::serial;
 
 #[test]
 #[serial]
-fn help_lists_show_and_audit() {
+fn help_lists_link_show_and_audit() {
     let context = TestContext::new();
 
     context.cli().arg("--help").assert().success().stdout(
@@ -18,6 +18,8 @@ fn help_lists_show_and_audit() {
             .and(predicate::str::contains("[aliases: rm]"))
             .and(predicate::str::contains("show"))
             .and(predicate::str::contains("[aliases: sw]"))
+            .and(predicate::str::contains("link"))
+            .and(predicate::str::contains("[aliases: ln]"))
             .and(predicate::str::contains("audit"))
             .and(predicate::str::contains("[aliases: au]")),
     );

@@ -1,6 +1,7 @@
 mod audit;
 mod generate;
 mod init;
+mod link;
 mod list;
 mod remove;
 mod show;
@@ -54,6 +55,13 @@ enum Commands {
     /// Print the public key for a managed host
     #[command(visible_alias = "sw")]
     Show { host: String },
+    /// Link a repository to a managed host
+    #[command(visible_alias = "ln")]
+    Link {
+        /// Host identifier to link
+        #[arg(value_name = "HOST")]
+        host: String,
+    },
     /// Inspect managed SSH assets without modifying them
     #[command(visible_alias = "au")]
     Audit,
@@ -68,6 +76,7 @@ pub fn run() {
         Commands::List => list::run(),
         Commands::Remove { host } => remove::run(&host),
         Commands::Show { host } => show::run(&host),
+        Commands::Link { host } => link::run(&host),
         Commands::Audit => audit::run(),
     };
 

@@ -1,11 +1,12 @@
 # ssv
 
-`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It bootstraps the required SSH layout, generates keys via `ssh-keygen`, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
+`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It bootstraps the required SSH layout, generates keys via `ssh-keygen`, relinks repository remotes to managed SSH hosts, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
 
 ## Features
 
 - Secure bootstrap: `ssv init` (alias: `i`) ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
 - Key generation: `ssv generate` (alias: `g`) wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
+- Repository relinking: `ssv link <HOST>` (alias: `ln`) rewrites the current repository's `origin` URL to use a managed SSH host.
 - Inventory awareness: `ssv list` (alias: `ls`) scans managed configs and shows the hostnames under management.
 - Public key lookup: `ssv show <HOST>` (alias: `sw`) prints the public key referenced by a managed host config.
 - Read-only audit: `ssv audit` (alias: `au`) reports missing assets, unsafe permissions, key mismatches, and other inconsistencies without modifying files.
@@ -35,6 +36,9 @@ ssv list
 # Print a managed host's public key
 ssv show github.com
 
+# Rewrite the current repository's origin remote to a managed host
+ssv link github.com
+
 # Audit managed SSH assets
 ssv audit
 
@@ -51,6 +55,7 @@ All subcommands support short aliases for convenience:
 | list | ls | List managed hosts |
 | remove | rm | Remove key pairs and configuration for a host |
 | show | sw | Print the public key for a managed host |
+| link | ln | Rewrite the current repository origin to a managed host |
 | audit | au | Inspect managed SSH assets without modifying them |
 
 Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `-t/--type`, `-u/--user`, `-p/--port`, and `-n/--hostname` flags let you customise the generated configuration.
@@ -78,3 +83,5 @@ git clone git@github.com:username/repo.git
 # Work
 git clone git@github.com-w:orgname/repo.git
 ```
+
+For an existing local checkout, run `ssv link github.com-w` from anywhere inside the repository to rewrite its `origin` remote to the managed host alias.
