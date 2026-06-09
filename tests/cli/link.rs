@@ -27,7 +27,8 @@ fn link_updates_remote_url_from_ssh() {
         .unwrap();
 
     // Run ssv link
-    context.cli()
+    context
+        .cli()
         .arg("link")
         .arg(host)
         .current_dir(&repo_dir)
@@ -72,7 +73,8 @@ fn link_updates_remote_url_from_https() {
         .unwrap();
 
     // Run ssv link
-    context.cli()
+    context
+        .cli()
         .arg("link")
         .arg(host)
         .current_dir(&repo_dir)
@@ -110,7 +112,8 @@ fn link_fails_if_host_not_found() {
         .status()
         .unwrap();
 
-    context.cli()
+    context
+        .cli()
         .arg("link")
         .arg("unknown-host")
         .current_dir(&repo_dir)
@@ -129,7 +132,8 @@ fn link_fails_if_not_git_repo() {
     let non_repo_dir = context.home().join("not-a-repo");
     fs::create_dir(&non_repo_dir).unwrap();
 
-    context.cli()
+    context
+        .cli()
         .arg("link")
         .arg(host)
         .current_dir(&non_repo_dir)
@@ -149,7 +153,8 @@ fn link_fails_if_no_origin_remote() {
     fs::create_dir(&repo_dir).unwrap();
     Command::new("git").arg("init").current_dir(&repo_dir).status().unwrap();
 
-    context.cli()
+    context
+        .cli()
         .arg("link")
         .arg(host)
         .current_dir(&repo_dir)
@@ -177,11 +182,9 @@ fn link_fails_on_unsupported_url_format() {
         .status()
         .unwrap();
 
-    context.cli()
-        .arg("link")
-        .arg(host)
-        .current_dir(&repo_dir)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("Error: unsupported git remote URL format: ftp://github.com/org/repo.git"));
+    context.cli().arg("link").arg(host).current_dir(&repo_dir).assert().failure().stderr(
+        predicate::str::contains(
+            "Error: unsupported git remote URL format: ftp://github.com/org/repo.git",
+        ),
+    );
 }
