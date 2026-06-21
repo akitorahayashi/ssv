@@ -21,9 +21,11 @@ jobs:
         uses: ./.github/actions/setup
         with:
           rust-version: 1.90.0
+          install-mise: 'true'
+          mise-tools: just
 
       - name: Build debug binary
-        run: cargo build
+        run: mise exec -- just build
 
   build-release:
     name: Build release binary

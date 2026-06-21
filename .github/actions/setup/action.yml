@@ -1,17 +1,29 @@
-name: 'Setup Rust Environment'
-description: 'Checks out code, installs Rust, and caches Cargo dependencies'
+name: "Setup Rust Environment"
+description: "Installs Rust, caches Cargo dependencies, and optionally installs mise tools"
 inputs:
   rust-version:
-    description: 'Rust toolchain version'
+    description: "Rust toolchain version"
     required: false
-    default: 'stable'
+    default: "stable"
   components:
-    description: 'Rust toolchain components to install (comma-separated, e.g., rustfmt,clippy)'
+    description: "Rust toolchain components to install (comma-separated, e.g., rustfmt,clippy)"
     required: false
-    default: ''
+    default: ""
+  install-mise:
+    description: "Install mise and optional tools"
+    required: false
+    default: "false"
+  mise-version:
+    description: "mise version to install"
+    required: false
+    default: "2026.2.19"
+  mise-tools:
+    description: "mise install arguments (space-separated, e.g., cargo:cargo-tarpaulin actionlint)"
+    required: false
+    default: ""
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@v1
@@ -31,3 +43,17 @@ runs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
           ${{ runner.os }}-cargo-
+
+    - name: Setup mise with locked project tools
+      if: inputs.install-mise == 'true' && inputs.mise-tools == ''
+      uses: jdx/mise-action@v4
+      with:
+        version: ${{ inputs.mise-version }}
+        install_args: --locked
+
+    - name: Setup mise with requested tools
+      if: inputs.install-mise == 'true' && inputs.mise-tools != ''
+      uses: jdx/mise-action@v4
+      with:
+        version: ${{ inputs.mise-version }}
+        install_args: --locked ${{ inputs.mise-tools }}
