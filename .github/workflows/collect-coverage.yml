@@ -20,10 +20,10 @@ jobs:
           persist-credentials: false
 
       - name: Setup build environment
-        uses: ./.github/actions/setup-build
-
-      - name: Install cargo-tarpaulin
-        run: mise install --locked cargo:cargo-tarpaulin
+        uses: ./.github/actions/setup
+        with:
+          install-mise: 'true'
+          mise-tools: just cargo:cargo-tarpaulin
 
       - name: Generate coverage
         continue-on-error: true

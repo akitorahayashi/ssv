@@ -1,5 +1,35 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
+# Show available recipes
+default: help
+
+# Show available recipes
+help:
+    @echo "Usage: just [recipe]"
+    @echo ""
+    @echo "Development tasks for ssv:"
+    @mise exec -- just --list | tail -n +2 | awk '{printf "  \033[36m%-24s\033[0m %s\n", $1, substr($0, index($0, $2))}'
+
+# Initialize project: install dependencies
+setup:
+    @mise trust
+    @mise install --locked
+
+# Format code
+fix:
+    cargo fmt
+    mise exec -- just --fmt --unstable
+
+# Verify formatting, lint, and compilation
+check:
+    cargo fmt --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    mise exec -- just --fmt --check --unstable
+
+# Run all tests
+test:
+    RUST_TEST_THREADS=1 cargo test --all-targets --all-features --quiet
+
 # Generate code coverage report
 coverage:
     rm -rf target/tarpaulin coverage
@@ -11,3 +41,7 @@ coverage:
         --output-dir coverage \
         --all-features \
         --fail-under 40
+
+# Compile the project
+build:
+    cargo build

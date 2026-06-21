@@ -14,9 +14,9 @@ jobs:
         uses: ./.github/actions/setup
         with:
           components: rustfmt,clippy
+          install-mise: 'true'
+          mise-tools: just
 
       - name: Run Static Checks
-        run: |
-          cargo fmt --check
-          cargo clippy --all-targets --all-features -- -D warnings
+        run: mise exec -- just check
         shell: bash
