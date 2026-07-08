@@ -1,10 +1,9 @@
 use crate::error::AppError;
-use crate::ssh::host_config::HostConfig;
+use crate::ssh::host_config::{self, HostConfig};
 use crate::ssh::keygen;
 use crate::ssh::layout::Layout;
 use crate::ssh::permissions;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
 pub(crate) fn execute(
@@ -16,7 +15,7 @@ pub(crate) fn execute(
 ) -> Result<String, AppError> {
     Layout::validate_host(host)?;
     if let Some(hn) = hostname {
-        validate_hostname(hn)?;
+        Layout::validate_hostname(hn)?;
     }
     Layout::validate_key_type(key_type)?;
     let layout = Layout::from_env()?;
@@ -38,7 +37,10 @@ pub(crate) fn execute(
     keygen::generate(key_type, &private)?;
     let result = (|| {
         permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
-        write_config(&config, &HostConfig::render(host, target_hostname, key_type, user, port))?;
+        host_config::write(
+            &config,
+            &HostConfig::render(host, target_hostname, key_type, user, port),
+        )?;
         Ok(fs::read_to_string(&public)?)
     })();
     match result {
@@ -50,29 +52,8 @@ pub(crate) fn execute(
     }
 }
 
-fn write_config(path: &Path, contents: &str) -> Result<(), AppError> {
-    let mut file = fs::File::create(path)?;
-    file.write_all(contents.as_bytes())?;
-    file.sync_all()?;
-    permissions::set_mode(path, permissions::PRIVATE_MODE)
-}
-
 fn remove_generated_artifacts<const N: usize>(paths: [&Path; N]) {
     for path in paths {
         let _ = fs::remove_file(path);
     }
-}
-
-fn validate_hostname(hostname: &str) -> Result<(), AppError> {
-    if hostname.is_empty() {
-        return Err(AppError::validation("hostname must not be empty"));
-    }
-    let allowed =
-        |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '[' | ']' | ':');
-    if !hostname.chars().all(allowed) {
-        return Err(AppError::validation(format!(
-            "invalid hostname '{hostname}'; allowed characters are alphanumeric, '.', '-', '_', '[', ']', ':'"
-        )));
-    }
-    Ok(())
 }

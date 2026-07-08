@@ -51,6 +51,26 @@ pub fn link(host: &str) -> Result<String, AppError> {
     app::link::execute(host)
 }
 
+/// Install a managed host's public key on the remote server via `ssh-copy-id`.
+///
+/// The connection target (user, hostname, port) is read from the managed host config, so the
+/// public key path, credentials, and port never need to be retyped. Returns the resolved target.
+pub fn authorize(host: &str) -> Result<String, AppError> {
+    app::authorize::execute(host)
+}
+
+/// Update the `HostName`, user, or port of an existing managed host without regenerating keys.
+///
+/// Unspecified directives keep their current values. Returns the resulting `HostName`.
+pub fn set(
+    host: &str,
+    hostname: Option<&str>,
+    user: Option<&str>,
+    port: Option<u16>,
+) -> Result<String, AppError> {
+    app::set::execute(host, hostname, user, port)
+}
+
 /// Inspect managed SSH assets without modifying them.
 pub fn audit() -> Result<AuditReport, AppError> {
     app::audit::execute()

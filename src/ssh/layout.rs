@@ -95,6 +95,10 @@ impl Layout {
 
     pub(crate) fn require_host_identity(&self, path: &Path, host: &str) -> Result<(), AppError> {
         self.require_managed(path)?;
+        Self::managed_key_type(path, host).map(|_| ())
+    }
+
+    pub(crate) fn managed_key_type(path: &Path, host: &str) -> Result<String, AppError> {
         let filename = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -108,7 +112,7 @@ impl Layout {
         if Self::validate_key_type(key_type).is_err() || identity_host != host {
             return Err(unmanaged_identity(path, host));
         }
-        Ok(())
+        Ok(key_type.to_string())
     }
 
     pub(crate) fn is_managed_key_candidate(path: &Path) -> bool {
@@ -219,6 +223,20 @@ impl Layout {
         {
             return Err(AppError::validation(format!(
                 "invalid key type '{key_type}'; expected lowercase letters or digits"
+            )));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_hostname(hostname: &str) -> Result<(), AppError> {
+        if hostname.is_empty() {
+            return Err(AppError::validation("hostname must not be empty"));
+        }
+        let allowed =
+            |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '[' | ']' | ':');
+        if !hostname.chars().all(allowed) {
+            return Err(AppError::validation(format!(
+                "invalid hostname '{hostname}'; allowed characters are alphanumeric, '.', '-', '_', '[', ']', ':'"
             )));
         }
         Ok(())
