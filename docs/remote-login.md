@@ -47,8 +47,11 @@ instead of regenerating keys:
 ssv set <HOST> -n <NEW_ADDRESS>        # also accepts -u and -p
 ```
 
-`ssv set` re-renders the host config, keeping the existing key pair and any directives that are
-not overridden. `ssv audit` verifies the managed assets afterward.
+`ssv set` rewrites the host config to ssv's managed layout (`Host`, `HostName`, `User`, `Port`,
+`IdentityFile`, `IdentitiesOnly`), carrying over the current `HostName`, user, and port for the
+flags not supplied and leaving the key pair untouched. Directives added to the file by hand
+(such as `ProxyJump`) are not part of the managed layout and do not survive the rewrite. `ssv
+audit` verifies the managed assets afterward.
 
 ## Tailscale
 

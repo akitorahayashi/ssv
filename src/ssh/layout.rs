@@ -242,6 +242,18 @@ impl Layout {
         Ok(())
     }
 
+    pub(crate) fn validate_user(user: &str) -> Result<(), AppError> {
+        if user.is_empty() {
+            return Err(AppError::validation("user must not be empty"));
+        }
+        if user.chars().any(|c| c.is_control() || c.is_whitespace()) {
+            return Err(AppError::validation(
+                "invalid user; control characters and whitespace are not allowed",
+            ));
+        }
+        Ok(())
+    }
+
     fn prepare_dir(&self, path: &Path) -> Result<BootstrapStatus, AppError> {
         match fs::symlink_metadata(path) {
             Ok(metadata) if metadata.file_type().is_dir() => {

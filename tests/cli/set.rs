@@ -41,6 +41,18 @@ fn set_updates_user_and_port_and_keeps_hostname() {
 
 #[test]
 #[serial]
+fn set_rejects_user_with_newline() {
+    let context = TestContext::new();
+    context.cli().args(["generate", "mmn", "-n", "mmn.local"]).assert().success();
+
+    context.cli().args(["set", "mmn", "-u", "admin\nProxyCommand malicious"]).assert().failure();
+
+    let config = fs::read_to_string(context.host_config("mmn")).unwrap();
+    assert!(!config.contains("ProxyCommand"));
+}
+
+#[test]
+#[serial]
 fn set_requires_at_least_one_field() {
     let context = TestContext::new();
     context.cli().args(["generate", "mmn"]).assert().success();

@@ -19,11 +19,14 @@ fn authorize_invokes_ssh_copy_id_with_config_values() {
         .success()
         .stdout(predicate::str::contains("Authorized 'mmn' public key on admin@mmn.local"));
 
+    let public_key = context.public_key("ed25519", "mmn");
     let invocation = context.copy_id_invocation();
-    assert!(invocation.contains("admin@mmn.local"), "invocation was: {invocation}");
-    assert!(invocation.contains("-p"), "invocation was: {invocation}");
-    assert!(invocation.contains("2022"), "invocation was: {invocation}");
-    assert!(invocation.contains("id_ed25519_mmn.pub"), "invocation was: {invocation}");
+    let argv: Vec<&str> = invocation.lines().collect();
+    assert_eq!(
+        argv,
+        vec!["-i", public_key.to_str().unwrap(), "-p", "2022", "admin@mmn.local"],
+        "unexpected ssh-copy-id argv"
+    );
 }
 
 #[test]

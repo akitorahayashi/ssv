@@ -17,6 +17,9 @@ pub(crate) fn execute(
     if let Some(hn) = hostname {
         Layout::validate_hostname(hn)?;
     }
+    if let Some(user) = user {
+        Layout::validate_user(user)?;
+    }
     Layout::validate_key_type(key_type)?;
     let layout = Layout::from_env()?;
     layout.prepare_for_generate()?;

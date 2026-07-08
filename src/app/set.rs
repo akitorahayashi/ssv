@@ -18,6 +18,9 @@ pub(crate) fn execute(
     if let Some(hostname) = hostname {
         Layout::validate_hostname(hostname)?;
     }
+    if let Some(user) = user {
+        Layout::validate_user(user)?;
+    }
     let layout = Layout::from_env()?;
     let config_path = layout.host_config(host);
     match fs::symlink_metadata(&config_path) {
