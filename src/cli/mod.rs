@@ -1,9 +1,11 @@
 mod audit;
+mod authorize;
 mod generate;
 mod init;
 mod link;
 mod list;
 mod remove;
+mod set;
 mod show;
 
 use crate::error::AppError;
@@ -42,6 +44,29 @@ enum Commands {
         #[arg(short = 'p', long, value_name = "PORT")]
         port: Option<u16>,
     },
+    /// Update HostName, user, or port for an existing managed host
+    #[command(visible_alias = "s")]
+    Set {
+        /// Host identifier to update
+        #[arg(value_name = "HOST")]
+        host: String,
+        /// New HostName for the SSH config
+        #[arg(short = 'n', long = "hostname", value_name = "HOSTNAME")]
+        hostname: Option<String>,
+        /// New user for the SSH config
+        #[arg(short = 'u', long, value_name = "USER")]
+        user: Option<String>,
+        /// New port for the SSH config
+        #[arg(short = 'p', long, value_name = "PORT")]
+        port: Option<u16>,
+    },
+    /// Install a managed host's public key on the remote server
+    #[command(visible_alias = "az")]
+    Authorize {
+        /// Host identifier to authorize
+        #[arg(value_name = "HOST")]
+        host: String,
+    },
     /// List managed hosts
     #[command(visible_alias = "ls")]
     List,
@@ -73,6 +98,10 @@ pub fn run() {
         Commands::Generate { host, hostname, key_type, user, port } => {
             generate::run(&host, hostname.as_deref(), &key_type, user.as_deref(), port)
         }
+        Commands::Set { host, hostname, user, port } => {
+            set::run(&host, hostname.as_deref(), user.as_deref(), port)
+        }
+        Commands::Authorize { host } => authorize::run(&host),
         Commands::List => list::run(),
         Commands::Remove { host } => remove::run(&host),
         Commands::Show { host } => show::run(&host),

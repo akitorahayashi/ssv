@@ -46,6 +46,10 @@ impl TestContext {
         self.set_mode(&self.host_config(host), 0o600);
     }
 
+    pub fn copy_id_invocation(&self) -> String {
+        fs::read_to_string(self.home().join("ssh-copy-id.args")).unwrap_or_default()
+    }
+
     pub fn set_mode(&self, path: &std::path::Path, mode: u32) {
         #[cfg(unix)]
         {

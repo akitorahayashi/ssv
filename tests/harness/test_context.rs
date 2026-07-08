@@ -1,4 +1,4 @@
-use super::keygen_stub;
+use super::{copy_id_stub, keygen_stub};
 use assert_cmd::Command;
 use std::env;
 use std::ffi::OsString;
@@ -11,7 +11,9 @@ pub struct TestContext {
     work_dir: PathBuf,
     original_home: Option<OsString>,
     original_keygen: Option<OsString>,
+    original_copy_id: Option<OsString>,
     keygen_stub: PathBuf,
+    copy_id_stub: PathBuf,
 }
 
 impl TestContext {
@@ -23,15 +25,27 @@ impl TestContext {
         fs::create_dir(&bin_dir).expect("bin directory should be created");
         let keygen_stub = bin_dir.join("ssh-keygen");
         keygen_stub::write(&keygen_stub);
+        let copy_id_stub = bin_dir.join("ssh-copy-id");
+        copy_id_stub::write(&copy_id_stub);
 
         let original_home = env::var_os("HOME");
         let original_keygen = env::var_os("SSV_SSH_KEYGEN_PATH");
+        let original_copy_id = env::var_os("SSV_SSH_COPY_ID_PATH");
         unsafe {
             env::set_var("HOME", root.path());
             env::set_var("SSV_SSH_KEYGEN_PATH", &keygen_stub);
+            env::set_var("SSV_SSH_COPY_ID_PATH", &copy_id_stub);
         }
 
-        Self { root, work_dir, original_home, original_keygen, keygen_stub }
+        Self {
+            root,
+            work_dir,
+            original_home,
+            original_keygen,
+            original_copy_id,
+            keygen_stub,
+            copy_id_stub,
+        }
     }
 
     pub fn home(&self) -> &Path {
@@ -43,7 +57,8 @@ impl TestContext {
         command
             .current_dir(&self.work_dir)
             .env("HOME", self.home())
-            .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub);
+            .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub)
+            .env("SSV_SSH_COPY_ID_PATH", &self.copy_id_stub);
         command
     }
 }
@@ -57,6 +72,10 @@ impl Drop for TestContext {
         match &self.original_keygen {
             Some(value) => unsafe { env::set_var("SSV_SSH_KEYGEN_PATH", value) },
             None => unsafe { env::remove_var("SSV_SSH_KEYGEN_PATH") },
+        }
+        match &self.original_copy_id {
+            Some(value) => unsafe { env::set_var("SSV_SSH_COPY_ID_PATH", value) },
+            None => unsafe { env::remove_var("SSV_SSH_COPY_ID_PATH") },
         }
     }
 }

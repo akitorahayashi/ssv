@@ -1,26 +1,57 @@
 use crate::error::AppError;
 use crate::ssh::layout::Layout;
-use std::path::PathBuf;
+use crate::ssh::permissions;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub(crate) struct HostConfig {
+    pub(crate) hostname: Option<String>,
+    pub(crate) user: Option<String>,
+    pub(crate) port: Option<u16>,
     pub(crate) identity: PathBuf,
 }
 
 impl HostConfig {
     pub(crate) fn parse(contents: &str, layout: &Layout) -> Result<Self, AppError> {
-        let identities = contents
-            .lines()
-            .filter_map(directive)
-            .filter(|(name, _)| name.eq_ignore_ascii_case("IdentityFile"))
-            .map(|(_, value)| layout.resolve_identity(unquote(value)))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        match identities.as_slice() {
-            [identity] => Ok(Self { identity: identity.clone() }),
-            [] => Err(AppError::validation("managed host config has no IdentityFile")),
-            _ => Err(AppError::validation("managed host config has multiple IdentityFile entries")),
+        let mut hostnames = Vec::new();
+        let mut users = Vec::new();
+        let mut ports = Vec::new();
+        let mut identities = Vec::new();
+        for (name, value) in contents.lines().filter_map(directive) {
+            if name.eq_ignore_ascii_case("HostName") {
+                hostnames.push(unquote(value).to_string());
+            } else if name.eq_ignore_ascii_case("User") {
+                users.push(unquote(value).to_string());
+            } else if name.eq_ignore_ascii_case("Port") {
+                ports.push(unquote(value).to_string());
+            } else if name.eq_ignore_ascii_case("IdentityFile") {
+                identities.push(layout.resolve_identity(unquote(value))?);
+            }
         }
+
+        let identity = match identities.as_slice() {
+            [identity] => identity.clone(),
+            [] => return Err(AppError::validation("managed host config has no IdentityFile")),
+            _ => {
+                return Err(AppError::validation(
+                    "managed host config has multiple IdentityFile entries",
+                ));
+            }
+        };
+        let hostname = single(hostnames, "HostName")?;
+        let user = single(users, "User")?;
+        let port = match single(ports, "Port")? {
+            Some(value) => Some(value.parse::<u16>().map_err(|_| {
+                AppError::validation(format!(
+                    "managed host config has an invalid Port value '{value}'"
+                ))
+            })?),
+            None => None,
+        };
+
+        Ok(Self { hostname, user, port, identity })
     }
 
     pub(crate) fn render(
@@ -40,6 +71,21 @@ impl HostConfig {
         contents.push_str(&format!("IdentityFile ~/.ssh/id_{key_type}_{host}\n"));
         contents.push_str("IdentitiesOnly yes\n");
         contents
+    }
+}
+
+pub(crate) fn write(path: &Path, contents: &str) -> Result<(), AppError> {
+    let mut file = fs::File::create(path)?;
+    file.write_all(contents.as_bytes())?;
+    file.sync_all()?;
+    permissions::set_mode(path, permissions::PRIVATE_MODE)
+}
+
+fn single(values: Vec<String>, name: &str) -> Result<Option<String>, AppError> {
+    match values.len() {
+        0 => Ok(None),
+        1 => Ok(values.into_iter().next()),
+        _ => Err(AppError::validation(format!("managed host config has multiple {name} entries"))),
     }
 }
 

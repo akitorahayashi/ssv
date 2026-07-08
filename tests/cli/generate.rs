@@ -64,6 +64,20 @@ fn generate_rejects_hostname_with_newline() {
 
 #[test]
 #[serial]
+fn generate_rejects_user_with_newline() {
+    let context = TestContext::new();
+
+    context
+        .cli()
+        .args(["generate", "github-inject", "-u", "git\nProxyCommand malicious"])
+        .assert()
+        .failure();
+
+    assert!(!context.host_config("github-inject").exists());
+}
+
+#[test]
+#[serial]
 fn generate_reports_rollback_when_public_key_read_fails() {
     let context = TestContext::new();
     let keygen = context.home().join("private-only-keygen");

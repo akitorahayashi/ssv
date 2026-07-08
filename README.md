@@ -1,11 +1,13 @@
 # ssv
 
-`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It bootstraps the required SSH layout, generates keys via `ssh-keygen`, relinks repository remotes to managed SSH hosts, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
+`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It bootstraps the required SSH layout, generates keys via `ssh-keygen`, installs public keys on remote servers via `ssh-copy-id`, updates managed host settings, relinks repository remotes to managed SSH hosts, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
 
 ## Features
 
 - Secure bootstrap: `ssv init` (alias: `i`) ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
 - Key generation: `ssv generate` (alias: `g`) wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
+- Public key installation: `ssv authorize <HOST>` (alias: `az`) wraps `ssh-copy-id`, installing the managed public key into a reachable server's `authorized_keys` using the user, hostname, and port from the managed config.
+- Setting updates: `ssv set <HOST>` (alias: `s`) rewrites the `HostName`, user, or port of an existing managed host without regenerating keys.
 - Repository relinking: `ssv link <HOST>` (alias: `ln`) rewrites the current repository's `origin` URL to use a managed SSH host.
 - Inventory awareness: `ssv list` (alias: `ls`) scans managed configs and shows the hostnames under management.
 - Public key lookup: `ssv show <HOST>` (alias: `sw`) prints the public key referenced by a managed host config.
@@ -30,6 +32,12 @@ ssv init
 # Generate keys/config for github.com
 ssv generate github.com -u git
 
+# Install a managed host's public key on a reachable server
+ssv authorize mymachine
+
+# Update the HostName, user, or port of an existing managed host
+ssv set mymachine -n 100.78.35.98
+
 # List all managed hosts
 ssv list
 
@@ -52,6 +60,8 @@ All subcommands support short aliases for convenience:
 | --- | --- | --- |
 | init | i | Bootstrap the SSH configuration layout |
 | generate | g | Generate a key pair and host configuration file |
+| set | s | Update the HostName, user, or port of a managed host |
+| authorize | az | Install a managed host's public key on the remote server |
 | list | ls | List managed hosts |
 | remove | rm | Remove key pairs and configuration for a host |
 | show | sw | Print the public key for a managed host |
@@ -60,7 +70,9 @@ All subcommands support short aliases for convenience:
 
 Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `-t/--type`, `-u/--user`, `-p/--port`, and `-n/--hostname` flags let you customise the generated configuration.
 
-`list`, `show`, and `audit` are read-only. `audit` writes findings to standard error and exits non-zero when error-level findings exist.
+`list`, `show`, and `audit` are read-only. `audit` writes findings to standard error and exits non-zero when error-level findings exist. `authorize` reaches the remote server and requires it to be running an SSH daemon; it prompts for the server password once to install the key.
+
+For the end-to-end flow of logging into a remote machine (server preparation, `authorize`, address updates, Tailscale, and phones), see [docs/remote-login.md](docs/remote-login.md).
 
 ### Managing Multiple Accounts
 
