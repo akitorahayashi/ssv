@@ -1,7 +1,6 @@
 use super::{copy_id_stub, keygen_stub};
 use assert_cmd::Command;
-use std::env;
-use std::ffi::OsString;
+use ssv::Context;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
@@ -9,9 +8,6 @@ use tempfile::TempDir;
 pub struct TestContext {
     pub(crate) root: TempDir,
     work_dir: PathBuf,
-    original_home: Option<OsString>,
-    original_keygen: Option<OsString>,
-    original_copy_id: Option<OsString>,
     keygen_stub: PathBuf,
     copy_id_stub: PathBuf,
 }
@@ -28,28 +24,23 @@ impl TestContext {
         let copy_id_stub = bin_dir.join("ssh-copy-id");
         copy_id_stub::write(&copy_id_stub);
 
-        let original_home = env::var_os("HOME");
-        let original_keygen = env::var_os("SSV_SSH_KEYGEN_PATH");
-        let original_copy_id = env::var_os("SSV_SSH_COPY_ID_PATH");
-        unsafe {
-            env::set_var("HOME", root.path());
-            env::set_var("SSV_SSH_KEYGEN_PATH", &keygen_stub);
-            env::set_var("SSV_SSH_COPY_ID_PATH", &copy_id_stub);
-        }
-
-        Self {
-            root,
-            work_dir,
-            original_home,
-            original_keygen,
-            original_copy_id,
-            keygen_stub,
-            copy_id_stub,
-        }
+        Self { root, work_dir, keygen_stub, copy_id_stub }
     }
 
     pub fn home(&self) -> &Path {
         self.root.path()
+    }
+
+    /// A library context bound to this test's temporary home and stub binaries, for in-process
+    /// calls. It reads no process environment, so tests need no global mutation or serialization.
+    pub fn ctx(&self) -> Context {
+        self.ctx_with_keygen(self.keygen_stub.clone())
+    }
+
+    /// Like [`TestContext::ctx`] but with a caller-supplied keygen stub (e.g. the private-only
+    /// stub used to drive the `generate` rollback path).
+    pub fn ctx_with_keygen(&self, keygen: PathBuf) -> Context {
+        Context::new(self.home().to_path_buf(), keygen, self.copy_id_stub.clone())
     }
 
     pub fn cli(&self) -> Command {
@@ -60,22 +51,5 @@ impl TestContext {
             .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub)
             .env("SSV_SSH_COPY_ID_PATH", &self.copy_id_stub);
         command
-    }
-}
-
-impl Drop for TestContext {
-    fn drop(&mut self) {
-        match &self.original_home {
-            Some(value) => unsafe { env::set_var("HOME", value) },
-            None => unsafe { env::remove_var("HOME") },
-        }
-        match &self.original_keygen {
-            Some(value) => unsafe { env::set_var("SSV_SSH_KEYGEN_PATH", value) },
-            None => unsafe { env::remove_var("SSV_SSH_KEYGEN_PATH") },
-        }
-        match &self.original_copy_id {
-            Some(value) => unsafe { env::set_var("SSV_SSH_COPY_ID_PATH", value) },
-            None => unsafe { env::remove_var("SSV_SSH_COPY_ID_PATH") },
-        }
     }
 }

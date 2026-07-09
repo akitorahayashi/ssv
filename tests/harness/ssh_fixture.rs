@@ -1,9 +1,7 @@
 use super::TestContext;
 use std::fs;
-use std::path::PathBuf;
-
-#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
 
 impl TestContext {
     pub fn ssh_root(&self) -> PathBuf {
@@ -50,14 +48,22 @@ impl TestContext {
         fs::read_to_string(self.home().join("ssh-copy-id.args")).unwrap_or_default()
     }
 
+    /// Install a keygen stub that writes only the private key (no matching public key), so the
+    /// caller can exercise the `generate` rollback path. Returns the stub path.
+    pub fn install_private_only_keygen(&self) -> PathBuf {
+        let keygen = self.home().join("private-only-keygen");
+        fs::write(
+            &keygen,
+            "#!/usr/bin/env sh\nset -eu\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-f\" ]; then\n    shift\n    outfile=\"$1\"\n  fi\n  shift\ndone\nprintf 'PRIVATE-ed25519\\n' > \"$outfile\"\n",
+        )
+        .expect("private-only keygen should be written");
+        self.set_mode(&keygen, 0o755);
+        keygen
+    }
+
     pub fn set_mode(&self, path: &std::path::Path, mode: u32) {
-        #[cfg(unix)]
-        {
-            let mut permissions = fs::metadata(path).expect("metadata should exist").permissions();
-            permissions.set_mode(mode);
-            fs::set_permissions(path, permissions).expect("mode should be set");
-        }
-        #[cfg(not(unix))]
-        let _ = (path, mode);
+        let mut permissions = fs::metadata(path).expect("metadata should exist").permissions();
+        permissions.set_mode(mode);
+        fs::set_permissions(path, permissions).expect("mode should be set");
     }
 }

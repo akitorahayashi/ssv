@@ -9,4 +9,4 @@
 - Tests: `just test`
 
 ## Testing Notes
-Integration tests in `tests/` stub `ssh-keygen`, create Git repositories through `git2`, and run sequentially via `serial_test` because they manipulate `HOME`. Keep new tests consistent with that pattern.
+Integration tests in `tests/` stub `ssh-keygen` and `ssh-copy-id` through the `SSV_SSH_KEYGEN_PATH` and `SSV_SSH_COPY_ID_PATH` environment variables, which override the subprocess binaries so the suite runs without real key material. They create Git repositories through `git2` and run sequentially via `serial_test` because they manipulate `HOME`. Keep new tests consistent with that pattern.

@@ -1,7 +1,9 @@
+use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config::{HostConfig, has_managed_include};
 use crate::ssh::keygen;
 use crate::ssh::layout::Layout;
+use crate::ssh::naming;
 use crate::ssh::permissions;
 use std::collections::HashSet;
 use std::fmt::{self, Display};
@@ -37,7 +39,6 @@ pub enum AuditCode {
     KeyMismatch,
     OrphanedAsset,
     ReadFailure,
-    UnsupportedPlatform,
 }
 
 impl Display for AuditCode {
@@ -55,7 +56,6 @@ impl Display for AuditCode {
             Self::KeyMismatch => "key-mismatch",
             Self::OrphanedAsset => "orphaned-asset",
             Self::ReadFailure => "read-failure",
-            Self::UnsupportedPlatform => "unsupported-platform",
         };
         formatter.write_str(code)
     }
@@ -102,15 +102,14 @@ impl AuditReport {
     }
 }
 
-pub(crate) fn execute() -> Result<AuditReport, AppError> {
-    let layout = Layout::from_env()?;
-    #[cfg(unix)]
+pub(crate) fn execute(ctx: &Context) -> Result<AuditReport, AppError> {
+    let layout = ctx.layout().clone();
     let owner = owner_of(layout.home());
     let mut audit = Audit {
         layout,
+        keygen: ctx.keygen().to_path_buf(),
         report: AuditReport::default(),
         referenced_keys: HashSet::new(),
-        #[cfg(unix)]
         owner,
     };
     audit.run();
@@ -119,9 +118,9 @@ pub(crate) fn execute() -> Result<AuditReport, AppError> {
 
 struct Audit {
     layout: Layout,
+    keygen: PathBuf,
     report: AuditReport,
     referenced_keys: HashSet<PathBuf>,
-    #[cfg(unix)]
     owner: Option<u32>,
 }
 
@@ -132,13 +131,6 @@ impl Audit {
         self.inspect_main_config();
         self.inspect_host_configs();
         self.inspect_orphaned_keys();
-
-        #[cfg(not(unix))]
-        self.report.warning(
-            AuditCode::UnsupportedPlatform,
-            &self.layout.root(),
-            "Unix ownership and permission checks were not performed",
-        );
     }
 
     fn inspect_main_config(&mut self) {
@@ -220,7 +212,12 @@ impl Audit {
     }
 
     fn inspect_private_key(&mut self, private: &Path) {
-        if !self.inspect_file(private, FilePolicy::Private) {
+        if !self.inspect_path(
+            private,
+            ExpectedType::File,
+            Some(permissions::PRIVATE_MODE),
+            SECRET_UNSAFE_MASK,
+        ) {
             return;
         }
         let public = match self.layout.public_key(private) {
@@ -230,14 +227,15 @@ impl Audit {
                 return;
             }
         };
-        if !self.inspect_file(&public, FilePolicy::Public) {
+        // Public keys carry no confidentiality requirement, so no permission bits are unsafe.
+        if !self.inspect_path(&public, ExpectedType::File, None, PUBLIC_UNSAFE_MASK) {
             return;
         }
         self.compare_key_pair(private, &public);
     }
 
     fn compare_key_pair(&mut self, private: &Path, public: &Path) {
-        let expected = match derived_public_key(private) {
+        let expected = match derived_public_key(&self.keygen, private) {
             Ok(key) => key,
             Err(message) => {
                 self.report.error(AuditCode::KeyMismatch, private, message);
@@ -279,7 +277,7 @@ impl Audit {
                     continue;
                 }
             };
-            if Layout::is_managed_key_candidate(&path) && !self.referenced_keys.contains(&path) {
+            if naming::is_managed_key_candidate(&path) && !self.referenced_keys.contains(&path) {
                 self.report.warning(
                     AuditCode::OrphanedAsset,
                     &path,
@@ -290,7 +288,7 @@ impl Audit {
     }
 
     fn inspect_directory(&mut self, path: &Path, expected_mode: u32) -> bool {
-        self.inspect_path(path, ExpectedType::Directory, Some(expected_mode), FilePolicy::Directory)
+        self.inspect_path(path, ExpectedType::Directory, Some(expected_mode), SECRET_UNSAFE_MASK)
     }
 
     fn inspect_config_file(&mut self, path: &Path) -> bool {
@@ -298,17 +296,8 @@ impl Audit {
             path,
             ExpectedType::File,
             Some(permissions::PRIVATE_MODE),
-            FilePolicy::Config,
+            CONFIG_UNSAFE_MASK,
         )
-    }
-
-    fn inspect_file(&mut self, path: &Path, policy: FilePolicy) -> bool {
-        let expected_mode = match policy {
-            FilePolicy::Private => Some(permissions::PRIVATE_MODE),
-            FilePolicy::Public => None,
-            FilePolicy::Config | FilePolicy::Directory => unreachable!(),
-        };
-        self.inspect_path(path, ExpectedType::File, expected_mode, policy)
     }
 
     fn inspect_path(
@@ -316,7 +305,7 @@ impl Audit {
         path: &Path,
         expected_type: ExpectedType,
         expected_mode: Option<u32>,
-        policy: FilePolicy,
+        unsafe_mask: u32,
     ) -> bool {
         let metadata = match fs::symlink_metadata(path) {
             Ok(metadata) => metadata,
@@ -357,12 +346,11 @@ impl Audit {
             }
         }
         self.inspect_owner(path, &metadata);
-        self.inspect_mode(path, &metadata, expected_mode, policy);
+        self.inspect_mode(path, &metadata, expected_mode, unsafe_mask);
         true
     }
 
     fn inspect_owner(&mut self, path: &Path, metadata: &fs::Metadata) {
-        #[cfg(unix)]
         if let Some(owner) = self.owner
             && permissions::owner(metadata) != owner
         {
@@ -372,8 +360,6 @@ impl Audit {
                 "managed asset owner differs from the HOME directory owner",
             );
         }
-        #[cfg(not(unix))]
-        let _ = (path, metadata);
     }
 
     fn inspect_mode(
@@ -381,34 +367,24 @@ impl Audit {
         path: &Path,
         metadata: &fs::Metadata,
         expected_mode: Option<u32>,
-        policy: FilePolicy,
+        unsafe_mask: u32,
     ) {
-        #[cfg(unix)]
+        let mode = permissions::mode(metadata);
+        if mode & unsafe_mask != 0 {
+            self.report.error(
+                AuditCode::UnsafePermissions,
+                path,
+                format!("permissions {mode:04o} expose the managed asset"),
+            );
+        } else if let Some(expected) = expected_mode
+            && mode != expected
         {
-            let mode = permissions::mode(metadata);
-            let unsafe_mode = match policy {
-                FilePolicy::Directory | FilePolicy::Private => mode & 0o077 != 0,
-                FilePolicy::Config => mode & 0o022 != 0,
-                FilePolicy::Public => false,
-            };
-            if unsafe_mode {
-                self.report.error(
-                    AuditCode::UnsafePermissions,
-                    path,
-                    format!("permissions {mode:04o} expose the managed asset"),
-                );
-            } else if let Some(expected) = expected_mode
-                && mode != expected
-            {
-                self.report.warning(
-                    AuditCode::NonStandardPermissions,
-                    path,
-                    format!("permissions {mode:04o} differ from ssv standard {expected:04o}"),
-                );
-            }
+            self.report.warning(
+                AuditCode::NonStandardPermissions,
+                path,
+                format!("permissions {mode:04o} differ from ssv standard {expected:04o}"),
+            );
         }
-        #[cfg(not(unix))]
-        let _ = (path, metadata, expected_mode, policy);
     }
 
     fn read_failure(&mut self, path: &Path, error: std::io::Error) {
@@ -422,16 +398,16 @@ enum ExpectedType {
     File,
 }
 
-#[derive(Clone, Copy)]
-enum FilePolicy {
-    Directory,
-    Config,
-    Private,
-    Public,
-}
+/// Permission bits that expose a confidential asset (directories, private keys): any access by
+/// group or other.
+const SECRET_UNSAFE_MASK: u32 = 0o077;
+/// Permission bits that expose a config file: write access by group or other.
+const CONFIG_UNSAFE_MASK: u32 = 0o022;
+/// Public keys carry no confidentiality requirement; no permission bits are unsafe.
+const PUBLIC_UNSAFE_MASK: u32 = 0o000;
 
-fn derived_public_key(private: &Path) -> Result<String, String> {
-    keygen::derive_public(private)
+fn derived_public_key(keygen: &Path, private: &Path) -> Result<String, String> {
+    keygen::derive_public(keygen, private)
         .map(|output| comparable_key(&output))
         .map_err(|error| error.to_string())
 }
@@ -440,7 +416,6 @@ fn comparable_key(contents: &str) -> String {
     contents.split_whitespace().take(2).collect::<Vec<_>>().join(" ")
 }
 
-#[cfg(unix)]
 fn owner_of(path: &Path) -> Option<u32> {
     fs::metadata(path).ok().map(|metadata| permissions::owner(&metadata))
 }

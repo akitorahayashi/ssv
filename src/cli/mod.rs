@@ -8,6 +8,7 @@ mod remove;
 mod set;
 mod show;
 
+use crate::context::Context;
 use crate::error::AppError;
 use clap::{Parser, Subcommand};
 
@@ -93,21 +94,8 @@ enum Commands {
 }
 
 pub fn run() {
-    let result = match Cli::parse().command {
-        Commands::Init => init::run(),
-        Commands::Generate { host, hostname, key_type, user, port } => {
-            generate::run(&host, hostname.as_deref(), &key_type, user.as_deref(), port)
-        }
-        Commands::Set { host, hostname, user, port } => {
-            set::run(&host, hostname.as_deref(), user.as_deref(), port)
-        }
-        Commands::Authorize { host } => authorize::run(&host),
-        Commands::List => list::run(),
-        Commands::Remove { host } => remove::run(&host),
-        Commands::Show { host } => show::run(&host),
-        Commands::Link { host } => link::run(&host),
-        Commands::Audit => audit::run(),
-    };
+    let command = Cli::parse().command;
+    let result = Context::from_env().and_then(|ctx| dispatch(&ctx, command));
 
     match result {
         Ok(Exit::Success) => {}
@@ -116,6 +104,24 @@ pub fn run() {
             eprintln!("Error: {error}");
             std::process::exit(1);
         }
+    }
+}
+
+fn dispatch(ctx: &Context, command: Commands) -> Result {
+    match command {
+        Commands::Init => init::run(ctx),
+        Commands::Generate { host, hostname, key_type, user, port } => {
+            generate::run(ctx, &host, hostname.as_deref(), &key_type, user.as_deref(), port)
+        }
+        Commands::Set { host, hostname, user, port } => {
+            set::run(ctx, &host, hostname.as_deref(), user.as_deref(), port)
+        }
+        Commands::Authorize { host } => authorize::run(ctx, &host),
+        Commands::List => list::run(ctx),
+        Commands::Remove { host } => remove::run(ctx, &host),
+        Commands::Show { host } => show::run(ctx, &host),
+        Commands::Link { host } => link::run(ctx, &host),
+        Commands::Audit => audit::run(ctx),
     }
 }
 

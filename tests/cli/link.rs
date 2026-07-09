@@ -1,12 +1,10 @@
 use crate::harness::TestContext;
 use git2::Repository;
 use predicates::prelude::*;
-use serial_test::serial;
 use std::fs;
 use std::path::Path;
 
 #[test]
-#[serial]
 fn link_updates_remote_url_from_ssh() {
     let context = TestContext::new();
     let host = "github.com-work";
@@ -35,7 +33,6 @@ fn link_updates_remote_url_from_ssh() {
 }
 
 #[test]
-#[serial]
 fn link_updates_remote_url_from_https() {
     let context = TestContext::new();
     let host = "github.com-work";
@@ -64,7 +61,6 @@ fn link_updates_remote_url_from_https() {
 }
 
 #[test]
-#[serial]
 fn link_fails_if_host_not_found() {
     let context = TestContext::new();
     context.cli().arg("init").assert().success();
@@ -84,7 +80,6 @@ fn link_fails_if_host_not_found() {
 }
 
 #[test]
-#[serial]
 fn link_fails_if_not_git_repo() {
     let context = TestContext::new();
     let host = "github.com";
@@ -100,7 +95,6 @@ fn link_fails_if_not_git_repo() {
 }
 
 #[test]
-#[serial]
 fn link_fails_if_no_origin_remote() {
     let context = TestContext::new();
     let host = "github.com";
@@ -122,7 +116,6 @@ fn link_fails_if_no_origin_remote() {
 }
 
 #[test]
-#[serial]
 fn link_fails_on_unsupported_url_format() {
     let context = TestContext::new();
     let host = "github.com";
@@ -134,7 +127,7 @@ fn link_fails_on_unsupported_url_format() {
     init_repository_with_origin(&repo_dir, "ftp://github.com/org/repo.git");
 
     context.cli().arg("link").arg(host).current_dir(&repo_dir).assert().failure().stderr(
-        predicate::str::contains(
+        predicate::str::starts_with(
             "Error: unsupported git remote URL format: ftp://github.com/org/repo.git",
         ),
     );

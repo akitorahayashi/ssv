@@ -1,30 +1,34 @@
-use crate::error::AppError;
+use crate::context::Context;
+use crate::error::{AppError, IoResultExt};
+use crate::ssh::bootstrap;
 use crate::ssh::host_config::{self, HostConfig};
 use crate::ssh::keygen;
-use crate::ssh::layout::Layout;
+use crate::ssh::naming::{self, ManagedKeyName};
 use crate::ssh::permissions;
 use std::fs;
 use std::path::Path;
 
 pub(crate) fn execute(
+    ctx: &Context,
     host: &str,
     hostname: Option<&str>,
     key_type: &str,
     user: Option<&str>,
     port: Option<u16>,
 ) -> Result<String, AppError> {
-    Layout::validate_host(host)?;
+    naming::validate_host(host)?;
     if let Some(hn) = hostname {
-        Layout::validate_hostname(hn)?;
+        naming::validate_hostname(hn)?;
     }
     if let Some(user) = user {
-        Layout::validate_user(user)?;
+        naming::validate_user(user)?;
     }
-    Layout::validate_key_type(key_type)?;
-    let layout = Layout::from_env()?;
-    layout.prepare_for_generate()?;
+    naming::validate_key_type(key_type)?;
+    let key_name = ManagedKeyName::new(key_type, host)?;
+    let layout = ctx.layout();
+    bootstrap::ensure_bootstrap(layout)?;
 
-    let (private, public) = layout.key_pair(key_type, host);
+    let (private, public) = layout.key_pair(&key_name);
     let config = layout.host_config(host);
     if layout.artifact_exists(&private)?
         || layout.artifact_exists(&public)?
@@ -37,14 +41,11 @@ pub(crate) fn execute(
 
     let target_hostname = hostname.unwrap_or(host);
 
-    keygen::generate(key_type, &private)?;
+    keygen::generate(ctx.keygen(), key_type, &private)?;
     let result = (|| {
         permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
-        host_config::write(
-            &config,
-            &HostConfig::render(host, target_hostname, key_type, user, port),
-        )?;
-        Ok(fs::read_to_string(&public)?)
+        host_config::write(&config, &HostConfig::render(&key_name, target_hostname, user, port))?;
+        fs::read_to_string(&public).path_ctx(&public)
     })();
     match result {
         Ok(public_key) => Ok(public_key),

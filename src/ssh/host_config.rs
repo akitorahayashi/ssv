@@ -1,5 +1,6 @@
-use crate::error::AppError;
+use crate::error::{AppError, IoResultExt};
 use crate::ssh::layout::Layout;
+use crate::ssh::naming::ManagedKeyName;
 use crate::ssh::permissions;
 use std::fs;
 use std::io::Write;
@@ -55,12 +56,12 @@ impl HostConfig {
     }
 
     pub(crate) fn render(
-        host: &str,
+        key_name: &ManagedKeyName,
         hostname: &str,
-        key_type: &str,
         user: Option<&str>,
         port: Option<u16>,
     ) -> String {
+        let host = key_name.host();
         let mut contents = format!("Host {host}\nHostName {hostname}\n");
         if let Some(user) = user {
             contents.push_str(&format!("User {user}\n"));
@@ -68,16 +69,35 @@ impl HostConfig {
         if let Some(port) = port {
             contents.push_str(&format!("Port {port}\n"));
         }
-        contents.push_str(&format!("IdentityFile ~/.ssh/id_{key_type}_{host}\n"));
+        contents.push_str(&format!("IdentityFile {}\n", key_name.identity_directive()));
         contents.push_str("IdentitiesOnly yes\n");
         contents
     }
 }
 
+/// Load and parse a managed host's config, enforcing the managed-root file invariant.
+///
+/// Performs the existence check (`NotFound` -> `HostNotFound`), rejects symlinked or
+/// non-regular `.conf` files, reads, and parses. Callers that require identity ownership chain
+/// `Layout::require_host_identity` on the returned `identity`.
+pub(crate) fn load(layout: &Layout, host: &str) -> Result<HostConfig, AppError> {
+    let path = layout.host_config(host);
+    match fs::symlink_metadata(&path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(AppError::HostNotFound(host.to_string()));
+        }
+        Err(error) => return Err(AppError::io(&path, error)),
+    }
+    layout.require_regular_file(&path)?;
+    let contents = fs::read_to_string(&path).path_ctx(&path)?;
+    HostConfig::parse(&contents, layout)
+}
+
 pub(crate) fn write(path: &Path, contents: &str) -> Result<(), AppError> {
-    let mut file = fs::File::create(path)?;
-    file.write_all(contents.as_bytes())?;
-    file.sync_all()?;
+    let mut file = fs::File::create(path).path_ctx(path)?;
+    file.write_all(contents.as_bytes()).path_ctx(path)?;
+    file.sync_all().path_ctx(path)?;
     permissions::set_mode(path, permissions::PRIVATE_MODE)
 }
 

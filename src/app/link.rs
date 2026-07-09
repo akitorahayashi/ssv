@@ -1,15 +1,14 @@
+use crate::context::Context;
 use crate::error::AppError;
-use crate::ssh::layout::Layout;
+use crate::ssh::host_config;
+use crate::ssh::naming;
 use git2::{ErrorCode, Repository};
 
-pub(crate) fn execute(host: &str) -> Result<String, AppError> {
-    Layout::validate_host(host)?;
-    let layout = Layout::from_env()?;
-    let config_path = layout.host_config(host);
-
-    if !layout.artifact_exists(&config_path)? {
-        return Err(AppError::HostNotFound(host.to_string()));
-    }
+pub(crate) fn execute(ctx: &Context, host: &str) -> Result<String, AppError> {
+    naming::validate_host(host)?;
+    // `link` never dereferences the identity; it only confirms the host is a managed,
+    // well-formed config (regular file, no symlink) before rewriting the git remote.
+    host_config::load(ctx.layout(), host)?;
 
     let repository = open_repository()?;
     let current_url = origin_url(&repository)?;
@@ -47,7 +46,7 @@ fn extract_repo_path(url: &str) -> Result<String, AppError> {
     // SSH: git@github.com:org/repo.git
     if url.starts_with("git@") {
         return url.find(':').map(|colon_pos| url[colon_pos + 1..].to_string()).ok_or_else(|| {
-            AppError::validation(format!("Error: unsupported git remote URL format: {url}"))
+            AppError::validation(format!("unsupported git remote URL format: {url}"))
         });
     }
 
@@ -58,5 +57,5 @@ fn extract_repo_path(url: &str) -> Result<String, AppError> {
         return Ok(path_part[slash_pos + 1..].to_string());
     }
 
-    Err(AppError::validation(format!("Error: unsupported git remote URL format: {url}")))
+    Err(AppError::validation(format!("unsupported git remote URL format: {url}")))
 }

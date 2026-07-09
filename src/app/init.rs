@@ -1,6 +1,7 @@
+use crate::context::Context;
 use crate::error::AppError;
-use crate::ssh::layout::{BootstrapStatus, Layout};
+use crate::ssh::bootstrap::{self, BootstrapStatus};
 
-pub(crate) fn execute() -> Result<BootstrapStatus, AppError> {
-    Layout::from_env()?.ensure_bootstrap()
+pub(crate) fn execute(ctx: &Context) -> Result<BootstrapStatus, AppError> {
+    bootstrap::ensure_bootstrap(ctx.layout())
 }

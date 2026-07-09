@@ -28,7 +28,7 @@ check:
 
 # Run all tests
 test:
-    RUST_TEST_THREADS=1 cargo test --all-targets --all-features --quiet
+    cargo test --all-targets --all-features --quiet
 
 # Generate code coverage report
 coverage:
@@ -40,7 +40,7 @@ coverage:
         --out Html \
         --output-dir coverage \
         --all-features \
-        --fail-under 40
+        --fail-under 85
 
 # Compile the project
 build:

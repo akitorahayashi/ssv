@@ -1,8 +1,6 @@
 use crate::harness::TestContext;
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn show_outputs_only_public_key() {
     let context = TestContext::new();
     context.cli().args(["generate", "show.test"]).assert().success();

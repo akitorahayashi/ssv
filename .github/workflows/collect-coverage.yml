@@ -12,7 +12,6 @@ jobs:
     runs-on: macos-14
     env:
       RUST_BACKTRACE: 1
-      RUST_TEST_THREADS: 1
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,5 +25,4 @@ jobs:
           mise-tools: just cargo:cargo-tarpaulin
 
       - name: Generate coverage
-        continue-on-error: true
         run: mise exec -- just coverage

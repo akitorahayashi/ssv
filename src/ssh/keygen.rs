@@ -1,10 +1,9 @@
-use crate::error::AppError;
+use crate::error::{AppError, IoResultExt};
 use std::path::Path;
 use std::process::Command;
 
-pub(crate) fn generate(key_type: &str, private: &Path) -> Result<(), AppError> {
-    let program = program();
-    let status = Command::new(&program)
+pub(crate) fn generate(keygen: &Path, key_type: &str, private: &Path) -> Result<(), AppError> {
+    let status = Command::new(keygen)
         .arg("-t")
         .arg(key_type)
         .arg("-f")
@@ -12,21 +11,27 @@ pub(crate) fn generate(key_type: &str, private: &Path) -> Result<(), AppError> {
         .arg("-q")
         .arg("-N")
         .arg("")
-        .status()?;
-    if status.success() { Ok(()) } else { Err(AppError::command_failed(&program, status)) }
+        .status()
+        .path_ctx(keygen)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(AppError::command_failed(&keygen.to_string_lossy(), status))
+    }
 }
 
-pub(crate) fn derive_public(private: &Path) -> Result<String, AppError> {
-    let program = program();
-    let output =
-        Command::new(&program).arg("-y").arg("-P").arg("").arg("-f").arg(private).output()?;
+pub(crate) fn derive_public(keygen: &Path, private: &Path) -> Result<String, AppError> {
+    let output = Command::new(keygen)
+        .arg("-y")
+        .arg("-P")
+        .arg("")
+        .arg("-f")
+        .arg(private)
+        .output()
+        .path_ctx(keygen)?;
     if !output.status.success() {
-        return Err(AppError::command_failed(&program, output.status));
+        return Err(AppError::command_failed(&keygen.to_string_lossy(), output.status));
     }
     String::from_utf8(output.stdout)
         .map_err(|error| AppError::config(format!("derived public key was not UTF-8: {error}")))
-}
-
-fn program() -> String {
-    std::env::var("SSV_SSH_KEYGEN_PATH").unwrap_or_else(|_| "ssh-keygen".into())
 }

@@ -1,7 +1,8 @@
 use crate::cli::{Exit, Result};
+use crate::context::Context;
 
-pub(crate) fn run() -> Result {
-    let report = crate::audit()?;
+pub(crate) fn run(ctx: &Context) -> Result {
+    let report = ctx.audit()?;
     for finding in &report.findings {
         eprintln!(
             "{} [{}] {}: {}",

@@ -1,10 +1,8 @@
 use crate::harness::TestContext;
 use predicates::prelude::*;
-use serial_test::serial;
 use std::fs;
 
 #[test]
-#[serial]
 fn init_bootstraps_ssh_layout() {
     let context = TestContext::new();
 
