@@ -134,7 +134,7 @@ fn link_fails_on_unsupported_url_format() {
     init_repository_with_origin(&repo_dir, "ftp://github.com/org/repo.git");
 
     context.cli().arg("link").arg(host).current_dir(&repo_dir).assert().failure().stderr(
-        predicate::str::contains(
+        predicate::str::starts_with(
             "Error: unsupported git remote URL format: ftp://github.com/org/repo.git",
         ),
     );

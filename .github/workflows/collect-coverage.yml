@@ -26,5 +26,4 @@ jobs:
           mise-tools: just cargo:cargo-tarpaulin
 
       - name: Generate coverage
-        continue-on-error: true
         run: mise exec -- just coverage

@@ -1,13 +1,14 @@
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 
 /// Library-wide error type capturing filesystem, validation, and command execution failures.
 #[derive(Debug)]
 pub enum AppError {
-    Io(io::Error),
+    /// A filesystem or subprocess I/O failure, tagged with the path (or program) it occurred on.
+    Io { path: PathBuf, source: io::Error },
     /// Configuration or environment issue that prevents command execution.
     ConfigError(String),
     /// Raised when a requested host cannot be located in managed assets.
@@ -21,16 +22,13 @@ pub enum AppError {
     /// Indicates a path outside the directory owned by ssv.
     OutsideManagedRoot(PathBuf),
     /// A spawned command exited with a non-zero status code.
-    CommandFailed {
-        program: String,
-        status: ExitStatus,
-    },
+    CommandFailed { program: String, status: ExitStatus },
 }
 
 impl Display for AppError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AppError::Io(err) => write!(f, "{}", err),
+            AppError::Io { path, source } => write!(f, "{}: {source}", path.display()),
             AppError::ConfigError(message) => write!(f, "{message}"),
             AppError::HostNotFound(host) => write!(f, "Host '{host}' was not found"),
             AppError::BootstrapRequired(path) => {
@@ -57,7 +55,7 @@ impl Display for AppError {
 impl Error for AppError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            AppError::Io(err) => Some(err),
+            AppError::Io { source, .. } => Some(source),
             AppError::RolledBack(error) => Some(error.as_ref()),
             AppError::ConfigError(_)
             | AppError::HostNotFound(_)
@@ -69,13 +67,11 @@ impl Error for AppError {
     }
 }
 
-impl From<io::Error> for AppError {
-    fn from(value: io::Error) -> Self {
-        AppError::Io(value)
-    }
-}
-
 impl AppError {
+    pub(crate) fn io(path: &Path, source: io::Error) -> Self {
+        AppError::Io { path: path.to_path_buf(), source }
+    }
+
     pub(crate) fn config<S: Into<String>>(message: S) -> Self {
         AppError::ConfigError(message.into())
     }
@@ -94,5 +90,17 @@ impl AppError {
 
     pub(crate) fn command_failed(program: &str, status: ExitStatus) -> Self {
         AppError::CommandFailed { program: program.to_string(), status }
+    }
+}
+
+/// Attach a path to an `io::Result`, converting its error into `AppError::Io`. Replaces the
+/// blanket `From<io::Error>` conversion so no I/O failure reaches the user without a path.
+pub(crate) trait IoResultExt<T> {
+    fn path_ctx(self, path: &Path) -> Result<T, AppError>;
+}
+
+impl<T> IoResultExt<T> for io::Result<T> {
+    fn path_ctx(self, path: &Path) -> Result<T, AppError> {
+        self.map_err(|source| AppError::io(path, source))
     }
 }

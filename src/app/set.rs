@@ -1,7 +1,7 @@
 use crate::error::AppError;
 use crate::ssh::host_config::{self, HostConfig};
 use crate::ssh::layout::Layout;
-use std::fs;
+use crate::ssh::naming::{self, ManagedKeyName};
 
 pub(crate) fn execute(
     host: &str,
@@ -14,34 +14,25 @@ pub(crate) fn execute(
             "specify at least one of --hostname, --user, or --port to update",
         ));
     }
-    Layout::validate_host(host)?;
+    naming::validate_host(host)?;
     if let Some(hostname) = hostname {
-        Layout::validate_hostname(hostname)?;
+        naming::validate_hostname(hostname)?;
     }
     if let Some(user) = user {
-        Layout::validate_user(user)?;
+        naming::validate_user(user)?;
     }
     let layout = Layout::from_env()?;
-    let config_path = layout.host_config(host);
-    match fs::symlink_metadata(&config_path) {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(AppError::HostNotFound(host.to_string()));
-        }
-        Err(error) => return Err(error.into()),
-    }
-    layout.require_regular_file(&config_path)?;
-    let config = HostConfig::parse(&fs::read_to_string(&config_path)?, &layout)?;
+    let config = host_config::load(&layout, host)?;
     layout.require_host_identity(&config.identity, host)?;
-    let key_type = Layout::managed_key_type(&config.identity, host)?;
+    let key_type = naming::managed_key_type(&config.identity, host)?;
+    let key_name = ManagedKeyName::new(&key_type, host)?;
 
     let new_hostname =
         hostname.map(str::to_string).or(config.hostname).unwrap_or_else(|| host.to_string());
     let new_user = user.map(str::to_string).or(config.user);
     let new_port = port.or(config.port);
 
-    let rendered =
-        HostConfig::render(host, &new_hostname, &key_type, new_user.as_deref(), new_port);
-    host_config::write(&config_path, &rendered)?;
+    let rendered = HostConfig::render(&key_name, &new_hostname, new_user.as_deref(), new_port);
+    host_config::write(&layout.host_config(host), &rendered)?;
     Ok(new_hostname)
 }

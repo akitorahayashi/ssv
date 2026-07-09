@@ -40,7 +40,7 @@ coverage:
         --out Html \
         --output-dir coverage \
         --all-features \
-        --fail-under 40
+        --fail-under 85
 
 # Compile the project
 build:

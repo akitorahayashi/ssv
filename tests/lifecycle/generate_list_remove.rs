@@ -1,10 +1,6 @@
 use crate::harness::TestContext;
 use serial_test::serial;
 use ssv::{generate, list, remove, show};
-use std::fs;
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 
 #[test]
 #[serial]
@@ -26,15 +22,7 @@ fn managed_host_lifecycle_uses_public_api() {
 #[cfg(unix)]
 fn generate_removes_artifacts_when_public_key_read_fails() {
     let context = TestContext::new();
-    let keygen = context.home().join("private-only-keygen");
-    fs::write(
-        &keygen,
-        "#!/usr/bin/env sh\nset -eu\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-f\" ]; then\n    shift\n    outfile=\"$1\"\n  fi\n  shift\ndone\nprintf 'PRIVATE-ed25519\\n' > \"$outfile\"\n",
-    )
-    .expect("keygen should be written");
-    let mut permissions = fs::metadata(&keygen).expect("keygen metadata").permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&keygen, permissions).expect("keygen should be executable");
+    let keygen = context.install_private_only_keygen();
     unsafe { std::env::set_var("SSV_SSH_KEYGEN_PATH", keygen) };
 
     assert!(generate("rollback.test", None, "ed25519", None, None).is_err());

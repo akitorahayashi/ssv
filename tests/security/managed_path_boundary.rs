@@ -31,3 +31,15 @@ fn default_identity_inside_ssh_root_is_not_managed() {
     let report = audit().expect("audit should succeed");
     assert!(report.findings.iter().any(|finding| finding.code == AuditCode::UnmanagedIdentity));
 }
+
+#[test]
+#[serial]
+fn show_rejects_unmanaged_identity_inside_ssh_root() {
+    let context = TestContext::new();
+    init().expect("init should succeed");
+    fs::write(context.ssh_root().join("id_ed25519"), "personal key")
+        .expect("personal key should be written");
+    context.write_host_config("default.test", "~/.ssh/id_ed25519");
+
+    assert!(show("default.test").is_err());
+}

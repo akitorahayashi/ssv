@@ -3,9 +3,6 @@ use predicates::prelude::*;
 use serial_test::serial;
 use std::fs;
 
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
-
 #[test]
 #[serial]
 fn generate_outputs_public_key_and_creates_assets() {
@@ -45,6 +42,21 @@ fn generate_with_custom_hostname() {
 
 #[test]
 #[serial]
+fn generate_rejects_host_colliding_with_reserved_key_name() {
+    let context = TestContext::new();
+
+    // Host "sk" with the default ed25519 type renders id_ed25519_sk, a reserved OpenSSH name.
+    context.cli().args(["generate", "sk"]).assert().failure();
+    assert!(!context.host_config("sk").exists());
+    assert!(!context.private_key("ed25519", "sk").exists());
+
+    // A non-colliding key type for the same host is accepted.
+    context.cli().args(["generate", "sk", "-t", "rsa"]).assert().success();
+    assert!(context.host_config("sk").exists());
+}
+
+#[test]
+#[serial]
 fn generate_rejects_hostname_with_newline() {
     let context = TestContext::new();
 
@@ -80,15 +92,7 @@ fn generate_rejects_user_with_newline() {
 #[serial]
 fn generate_reports_rollback_when_public_key_read_fails() {
     let context = TestContext::new();
-    let keygen = context.home().join("private-only-keygen");
-    fs::write(
-        &keygen,
-        "#!/usr/bin/env sh\nset -eu\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-f\" ]; then\n    shift\n    outfile=\"$1\"\n  fi\n  shift\ndone\nprintf 'PRIVATE-ed25519\\n' > \"$outfile\"\n",
-    )
-    .expect("keygen should be written");
-    let mut permissions = fs::metadata(&keygen).expect("keygen metadata").permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&keygen, permissions).expect("keygen should be executable");
+    let keygen = context.install_private_only_keygen();
 
     let mut command = context.cli();
     command.env("SSV_SSH_KEYGEN_PATH", &keygen);

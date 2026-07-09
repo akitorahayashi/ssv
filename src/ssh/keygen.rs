@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::error::{AppError, IoResultExt};
 use std::path::Path;
 use std::process::Command;
 
@@ -12,14 +12,21 @@ pub(crate) fn generate(key_type: &str, private: &Path) -> Result<(), AppError> {
         .arg("-q")
         .arg("-N")
         .arg("")
-        .status()?;
+        .status()
+        .path_ctx(Path::new(&program))?;
     if status.success() { Ok(()) } else { Err(AppError::command_failed(&program, status)) }
 }
 
 pub(crate) fn derive_public(private: &Path) -> Result<String, AppError> {
     let program = program();
-    let output =
-        Command::new(&program).arg("-y").arg("-P").arg("").arg("-f").arg(private).output()?;
+    let output = Command::new(&program)
+        .arg("-y")
+        .arg("-P")
+        .arg("")
+        .arg("-f")
+        .arg(private)
+        .output()
+        .path_ctx(Path::new(&program))?;
     if !output.status.success() {
         return Err(AppError::command_failed(&program, output.status));
     }

@@ -1,6 +1,7 @@
-use crate::error::AppError;
-use crate::ssh::host_config::HostConfig;
+use crate::error::{AppError, IoResultExt};
+use crate::ssh::host_config;
 use crate::ssh::layout::Layout;
+use crate::ssh::naming;
 use std::fs;
 use std::path::Path;
 
@@ -23,22 +24,14 @@ impl RemovalStatus {
 }
 
 pub(crate) fn execute(host: &str) -> Result<RemovalStatus, AppError> {
-    Layout::validate_host(host)?;
+    naming::validate_host(host)?;
     let layout = Layout::from_env()?;
-    let config_path = layout.host_config(host);
-    match fs::symlink_metadata(&config_path) {
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Err(AppError::HostNotFound(host.to_string()));
-        }
-        Err(error) => return Err(error.into()),
-    }
-    layout.require_regular_file(&config_path)?;
-    let config = HostConfig::parse(&fs::read_to_string(&config_path)?, &layout)?;
+    let config = host_config::load(&layout, host)?;
     layout.require_host_identity(&config.identity, host)?;
     let public = layout.public_key(&config.identity)?;
 
-    fs::remove_file(config_path)?;
+    let config_path = layout.host_config(host);
+    fs::remove_file(&config_path).path_ctx(&config_path)?;
 
     let mut missing = 0;
     if !remove_if_present(&config.identity)? {
@@ -55,6 +48,6 @@ fn remove_if_present(path: &Path) -> Result<bool, AppError> {
     match fs::remove_file(path) {
         Ok(()) => Ok(true),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(err) => Err(err.into()),
+        Err(err) => Err(AppError::io(path, err)),
     }
 }

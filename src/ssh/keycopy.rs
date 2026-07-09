@@ -1,4 +1,4 @@
-use crate::error::AppError;
+use crate::error::{AppError, IoResultExt};
 use std::path::Path;
 use std::process::Command;
 
@@ -15,7 +15,7 @@ pub(crate) fn install(
         command.arg("-p").arg(port.to_string());
     }
     command.arg(target(user, hostname));
-    let status = command.status()?;
+    let status = command.status().path_ctx(Path::new(&program))?;
     if status.success() { Ok(()) } else { Err(AppError::command_failed(&program, status)) }
 }
 
