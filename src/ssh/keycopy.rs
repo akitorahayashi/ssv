@@ -3,20 +3,24 @@ use std::path::Path;
 use std::process::Command;
 
 pub(crate) fn install(
+    copy_id: &Path,
     public_key: &Path,
     user: Option<&str>,
     hostname: &str,
     port: Option<u16>,
 ) -> Result<(), AppError> {
-    let program = program();
-    let mut command = Command::new(&program);
+    let mut command = Command::new(copy_id);
     command.arg("-i").arg(public_key);
     if let Some(port) = port {
         command.arg("-p").arg(port.to_string());
     }
     command.arg(target(user, hostname));
-    let status = command.status().path_ctx(Path::new(&program))?;
-    if status.success() { Ok(()) } else { Err(AppError::command_failed(&program, status)) }
+    let status = command.status().path_ctx(copy_id)?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(AppError::command_failed(&copy_id.to_string_lossy(), status))
+    }
 }
 
 pub(crate) fn target(user: Option<&str>, hostname: &str) -> String {
@@ -24,8 +28,4 @@ pub(crate) fn target(user: Option<&str>, hostname: &str) -> String {
         Some(user) => format!("{user}@{hostname}"),
         None => hostname.to_string(),
     }
-}
-
-fn program() -> String {
-    std::env::var("SSV_SSH_COPY_ID_PATH").unwrap_or_else(|_| "ssh-copy-id".into())
 }

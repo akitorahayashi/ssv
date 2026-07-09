@@ -1,10 +1,8 @@
 use crate::harness::TestContext;
 use predicates::prelude::*;
-use serial_test::serial;
 use std::fs;
 
 #[test]
-#[serial]
 fn generate_outputs_public_key_and_creates_assets() {
     let context = TestContext::new();
 
@@ -21,7 +19,6 @@ fn generate_outputs_public_key_and_creates_assets() {
 }
 
 #[test]
-#[serial]
 fn generate_with_custom_hostname() {
     let context = TestContext::new();
 
@@ -41,7 +38,6 @@ fn generate_with_custom_hostname() {
 }
 
 #[test]
-#[serial]
 fn generate_rejects_host_colliding_with_reserved_key_name() {
     let context = TestContext::new();
 
@@ -56,7 +52,6 @@ fn generate_rejects_host_colliding_with_reserved_key_name() {
 }
 
 #[test]
-#[serial]
 fn generate_rejects_hostname_with_newline() {
     let context = TestContext::new();
 
@@ -75,7 +70,6 @@ fn generate_rejects_hostname_with_newline() {
 }
 
 #[test]
-#[serial]
 fn generate_rejects_user_with_newline() {
     let context = TestContext::new();
 
@@ -89,7 +83,6 @@ fn generate_rejects_user_with_newline() {
 }
 
 #[test]
-#[serial]
 fn generate_reports_rollback_when_public_key_read_fails() {
     let context = TestContext::new();
     let keygen = context.install_private_only_keygen();

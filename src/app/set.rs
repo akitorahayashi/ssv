@@ -1,9 +1,10 @@
+use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config::{self, HostConfig};
-use crate::ssh::layout::Layout;
 use crate::ssh::naming::{self, ManagedKeyName};
 
 pub(crate) fn execute(
+    ctx: &Context,
     host: &str,
     hostname: Option<&str>,
     user: Option<&str>,
@@ -21,8 +22,8 @@ pub(crate) fn execute(
     if let Some(user) = user {
         naming::validate_user(user)?;
     }
-    let layout = Layout::from_env()?;
-    let config = host_config::load(&layout, host)?;
+    let layout = ctx.layout();
+    let config = host_config::load(layout, host)?;
     layout.require_host_identity(&config.identity, host)?;
     let key_type = naming::managed_key_type(&config.identity, host)?;
     let key_name = ManagedKeyName::new(&key_type, host)?;

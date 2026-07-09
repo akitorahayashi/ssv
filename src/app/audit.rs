@@ -1,3 +1,4 @@
+use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config::{HostConfig, has_managed_include};
 use crate::ssh::keygen;
@@ -101,17 +102,23 @@ impl AuditReport {
     }
 }
 
-pub(crate) fn execute() -> Result<AuditReport, AppError> {
-    let layout = Layout::from_env()?;
+pub(crate) fn execute(ctx: &Context) -> Result<AuditReport, AppError> {
+    let layout = ctx.layout().clone();
     let owner = owner_of(layout.home());
-    let mut audit =
-        Audit { layout, report: AuditReport::default(), referenced_keys: HashSet::new(), owner };
+    let mut audit = Audit {
+        layout,
+        keygen: ctx.keygen().to_path_buf(),
+        report: AuditReport::default(),
+        referenced_keys: HashSet::new(),
+        owner,
+    };
     audit.run();
     Ok(audit.report)
 }
 
 struct Audit {
     layout: Layout,
+    keygen: PathBuf,
     report: AuditReport,
     referenced_keys: HashSet<PathBuf>,
     owner: Option<u32>,
@@ -228,7 +235,7 @@ impl Audit {
     }
 
     fn compare_key_pair(&mut self, private: &Path, public: &Path) {
-        let expected = match derived_public_key(private) {
+        let expected = match derived_public_key(&self.keygen, private) {
             Ok(key) => key,
             Err(message) => {
                 self.report.error(AuditCode::KeyMismatch, private, message);
@@ -399,8 +406,8 @@ const CONFIG_UNSAFE_MASK: u32 = 0o022;
 /// Public keys carry no confidentiality requirement; no permission bits are unsafe.
 const PUBLIC_UNSAFE_MASK: u32 = 0o000;
 
-fn derived_public_key(private: &Path) -> Result<String, String> {
-    keygen::derive_public(private)
+fn derived_public_key(keygen: &Path, private: &Path) -> Result<String, String> {
+    keygen::derive_public(keygen, private)
         .map(|output| comparable_key(&output))
         .map_err(|error| error.to_string())
 }

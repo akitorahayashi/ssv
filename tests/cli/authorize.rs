@@ -1,9 +1,7 @@
 use crate::harness::TestContext;
 use predicates::prelude::*;
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn authorize_invokes_ssh_copy_id_with_config_values() {
     let context = TestContext::new();
     context
@@ -30,7 +28,6 @@ fn authorize_invokes_ssh_copy_id_with_config_values() {
 }
 
 #[test]
-#[serial]
 fn authorize_targets_hostname_only_without_user() {
     let context = TestContext::new();
     context.cli().args(["generate", "box", "-n", "box.example"]).assert().success();
@@ -46,7 +43,6 @@ fn authorize_targets_hostname_only_without_user() {
 }
 
 #[test]
-#[serial]
 fn authorize_fails_for_unknown_host() {
     let context = TestContext::new();
     context.cli().arg("init").assert().success();

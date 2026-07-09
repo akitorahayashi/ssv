@@ -1,9 +1,9 @@
+use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
-use crate::ssh::layout::Layout;
 use std::fs;
 
-pub(crate) fn execute() -> Result<Vec<String>, AppError> {
-    let hosts_dir = Layout::from_env()?.hosts();
+pub(crate) fn execute(ctx: &Context) -> Result<Vec<String>, AppError> {
+    let hosts_dir = ctx.layout().hosts();
     let entries = match fs::read_dir(&hosts_dir) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {

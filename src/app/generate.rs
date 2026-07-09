@@ -1,14 +1,15 @@
+use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
 use crate::ssh::bootstrap;
 use crate::ssh::host_config::{self, HostConfig};
 use crate::ssh::keygen;
-use crate::ssh::layout::Layout;
 use crate::ssh::naming::{self, ManagedKeyName};
 use crate::ssh::permissions;
 use std::fs;
 use std::path::Path;
 
 pub(crate) fn execute(
+    ctx: &Context,
     host: &str,
     hostname: Option<&str>,
     key_type: &str,
@@ -24,8 +25,8 @@ pub(crate) fn execute(
     }
     naming::validate_key_type(key_type)?;
     let key_name = ManagedKeyName::new(key_type, host)?;
-    let layout = Layout::from_env()?;
-    bootstrap::ensure_bootstrap(&layout)?;
+    let layout = ctx.layout();
+    bootstrap::ensure_bootstrap(layout)?;
 
     let (private, public) = layout.key_pair(&key_name);
     let config = layout.host_config(host);
@@ -40,7 +41,7 @@ pub(crate) fn execute(
 
     let target_hostname = hostname.unwrap_or(host);
 
-    keygen::generate(key_type, &private)?;
+    keygen::generate(ctx.keygen(), key_type, &private)?;
     let result = (|| {
         permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
         host_config::write(&config, &HostConfig::render(&key_name, target_hostname, user, port))?;

@@ -1,9 +1,7 @@
 use crate::harness::TestContext;
 use predicates::prelude::*;
-use serial_test::serial;
 
 #[test]
-#[serial]
 fn list_outputs_managed_hosts() {
     let context = TestContext::new();
     context.cli().args(["generate", "alpha.test"]).assert().success();
@@ -18,7 +16,6 @@ fn list_outputs_managed_hosts() {
 }
 
 #[test]
-#[serial]
 fn list_reports_empty_state_after_init() {
     let context = TestContext::new();
 

@@ -1,10 +1,8 @@
 use crate::harness::TestContext;
 use predicates::prelude::*;
-use serial_test::serial;
 use std::fs;
 
 #[test]
-#[serial]
 fn set_updates_hostname_and_preserves_key() {
     let context = TestContext::new();
     context.cli().args(["generate", "mmn", "-n", "mmn.local"]).assert().success();
@@ -26,7 +24,6 @@ fn set_updates_hostname_and_preserves_key() {
 }
 
 #[test]
-#[serial]
 fn set_updates_user_and_port_and_keeps_hostname() {
     let context = TestContext::new();
     context.cli().args(["generate", "mmn", "-n", "mmn.local"]).assert().success();
@@ -40,7 +37,6 @@ fn set_updates_user_and_port_and_keeps_hostname() {
 }
 
 #[test]
-#[serial]
 fn set_rejects_user_with_newline() {
     let context = TestContext::new();
     context.cli().args(["generate", "mmn", "-n", "mmn.local"]).assert().success();
@@ -52,7 +48,6 @@ fn set_rejects_user_with_newline() {
 }
 
 #[test]
-#[serial]
 fn set_requires_at_least_one_field() {
     let context = TestContext::new();
     context.cli().args(["generate", "mmn"]).assert().success();
@@ -66,7 +61,6 @@ fn set_requires_at_least_one_field() {
 }
 
 #[test]
-#[serial]
 fn set_fails_for_unknown_host() {
     let context = TestContext::new();
     context.cli().arg("init").assert().success();

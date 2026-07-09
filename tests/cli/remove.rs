@@ -1,10 +1,8 @@
 use crate::harness::TestContext;
 use predicates::prelude::*;
-use serial_test::serial;
 use std::fs;
 
 #[test]
-#[serial]
 fn remove_outputs_result_and_deletes_assets() {
     let context = TestContext::new();
     context.cli().args(["generate", "cleanup.test"]).assert().success();
@@ -21,7 +19,6 @@ fn remove_outputs_result_and_deletes_assets() {
 }
 
 #[test]
-#[serial]
 fn remove_reports_when_some_assets_are_already_missing() {
     let context = TestContext::new();
     context.cli().args(["generate", "partial.test"]).assert().success();

@@ -1,6 +1,6 @@
+use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
 use crate::ssh::host_config;
-use crate::ssh::layout::Layout;
 use crate::ssh::naming;
 use std::fs;
 use std::path::Path;
@@ -23,10 +23,10 @@ impl RemovalStatus {
     }
 }
 
-pub(crate) fn execute(host: &str) -> Result<RemovalStatus, AppError> {
+pub(crate) fn execute(ctx: &Context, host: &str) -> Result<RemovalStatus, AppError> {
     naming::validate_host(host)?;
-    let layout = Layout::from_env()?;
-    let config = host_config::load(&layout, host)?;
+    let layout = ctx.layout();
+    let config = host_config::load(layout, host)?;
     layout.require_host_identity(&config.identity, host)?;
     let public = layout.public_key(&config.identity)?;
 

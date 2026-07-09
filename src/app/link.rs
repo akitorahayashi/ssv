@@ -1,15 +1,14 @@
+use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config;
-use crate::ssh::layout::Layout;
 use crate::ssh::naming;
 use git2::{ErrorCode, Repository};
 
-pub(crate) fn execute(host: &str) -> Result<String, AppError> {
+pub(crate) fn execute(ctx: &Context, host: &str) -> Result<String, AppError> {
     naming::validate_host(host)?;
-    let layout = Layout::from_env()?;
     // `link` never dereferences the identity; it only confirms the host is a managed,
     // well-formed config (regular file, no symlink) before rewriting the git remote.
-    host_config::load(&layout, host)?;
+    host_config::load(ctx.layout(), host)?;
 
     let repository = open_repository()?;
     let current_url = origin_url(&repository)?;

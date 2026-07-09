@@ -16,8 +16,7 @@ impl Layout {
         Ok(Self { home: PathBuf::from(home) })
     }
 
-    #[cfg(test)]
-    pub(crate) fn with_home(home: PathBuf) -> Self {
+    pub(crate) fn from_home(home: PathBuf) -> Self {
         Self { home }
     }
 
@@ -163,7 +162,7 @@ mod tests {
 
     #[test]
     fn identity_resolution_rejects_paths_outside_root() {
-        let layout = Layout::with_home(PathBuf::from("/home/test"));
+        let layout = Layout::from_home(PathBuf::from("/home/test"));
         assert!(layout.resolve_identity("/outside/key").is_err());
     }
 }

@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn include_detection_is_idempotent() {
         let temp = tempfile::TempDir::new().expect("temp dir");
-        let layout = Layout::with_home(temp.path().to_path_buf());
+        let layout = Layout::from_home(temp.path().to_path_buf());
         ensure_bootstrap(&layout).expect("bootstrap should succeed");
         ensure_bootstrap(&layout).expect("bootstrap should remain idempotent");
         let config = fs::read_to_string(layout.config()).expect("config should exist");
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn quoted_include_is_not_duplicated() {
         let temp = tempfile::TempDir::new().expect("temp dir");
-        let layout = Layout::with_home(temp.path().to_path_buf());
+        let layout = Layout::from_home(temp.path().to_path_buf());
         prepare_dir(&layout.root()).expect("root should exist");
         prepare_dir(&layout.hosts()).expect("hosts should exist");
         fs::write(layout.config(), "Include \"~/.ssh/conf.d/*.conf\"\n")
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn managed_include_is_inserted_before_first_block() {
         let temp = tempfile::TempDir::new().expect("temp dir");
-        let layout = Layout::with_home(temp.path().to_path_buf());
+        let layout = Layout::from_home(temp.path().to_path_buf());
         prepare_dir(&layout.root()).expect("root should exist");
         prepare_dir(&layout.hosts()).expect("hosts should exist");
         fs::write(layout.config(), "# settings\nHost example\n  User test\n")
