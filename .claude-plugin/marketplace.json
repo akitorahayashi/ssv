@@ -1,0 +1,14 @@
+{
+  "name": "ssv",
+  "description": "Agent Skills plugin marketplace for ssv.",
+  "owner": {
+    "name": "akitorahayashi"
+  },
+  "plugins": [
+    {
+      "name": "ssv-plugin",
+      "source": "./plugin",
+      "description": "Skills for managing SSH keys and host configurations with ssv."
+    }
+  ]
+}

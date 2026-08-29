@@ -56,6 +56,34 @@ plugin/
 | github-ssh-setup | `<HOST>` | `ssv` を使用した GitHub 用 SSH ホストの構築および公開鍵登録 |
 | ip-ssh-setup | `<IP> <USERNAME>` | IP アドレスとユーザー名を指定した SSH 接続ホストの構築 |
 
+### インストール
+
+マーケットプレイス経由またはローカルディレクトリの指定により読み込みが可能です。
+
+#### Claude Code
+
+マーケットプレイス経由でのインストール:
+
+```bash
+claude plugin marketplace add akitorahayashi/ssv
+claude plugin install ssv-plugin@ssv
+```
+
+ローカルセッションでの一時読み込み:
+
+```bash
+claude --plugin-dir ./plugin
+```
+
+#### Codex
+
+マーケットプレイス経由でのインストール:
+
+```bash
+codex plugin marketplace add akitorahayashi/ssv
+codex plugin add ssv-plugin@ssv
+```
+
 ## 配置規則
 
 設定ファイルは `~/.ssh/conf.d/<HOST>.conf` に保存され、鍵ペアは `~/.ssh/id_<TYPE>_<HOST>` の命名規則に従います。生成される設定は `-t/--type`、`-u/--user`、`-p/--port`、`-n/--hostname` の各オプションに対応します。

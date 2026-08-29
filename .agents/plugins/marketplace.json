@@ -1,0 +1,16 @@
+{
+  "name": "ssv",
+  "interface": {
+    "displayName": "ssv Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "ssv-plugin",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
