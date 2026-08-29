@@ -81,14 +81,14 @@ ssh -T git@<HOST>
 Hi <ユーザー名>! You've successfully authenticated, but GitHub does not provide shell access.
 ```
 
-認証に失敗した場合は `ssv audit` を実行し、その出力をユーザーに報告する。
+注意: GitHub の仕様上、シェルアクセスが無効なため `ssh -T` は成功時もプロセス終了ステータス `1` を返します。成功判定は終了コードではなく、標準出力に `Hi <ユーザー名>! You've successfully authenticated` が含まれているかで判断します。出力内に認証成功メッセージがない場合のみ `ssv audit` を実行します。
 
 
 ## 障害対応
 
 | 症状 | 対応 |
 |---|---|
-| `ssv generate` でホストが既に存在すると報告される | ユーザーに確認のうえ `ssv remove <HOST>` を実行し、再生成する |
+| `ssv generate` でホストが既に存在すると報告される | `ssv show <HOST>` で既存鍵を表示し `ssh -T` で接続検証する。設定変更は `ssv set` を使用し、鍵ローテーション要求時のみユーザー確認後に `ssv remove` して再生成する |
 | `ssh -T` で `Permission denied` が返る | 公開鍵が GitHub に登録されているか確認する。`ssv show <HOST>` で鍵を再表示して照合する |
-| `ssv audit` でアセット不足が報告される | 指摘された内容に従い、不足しているコンポーネントのみ再生成する |
+| `ssv audit` で不整合が報告される | 設定不整合は `ssv set` で修正し、鍵ペア欠損・破損時のみユーザー確認後に `ssv remove` 経由で再生成する |
 | `ssv init` が失敗する | `~/.ssh` のパーミッションを確認する。`700` でなければならない |

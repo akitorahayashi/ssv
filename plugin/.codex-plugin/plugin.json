@@ -2,6 +2,9 @@
   "name": "ssv-plugin",
   "version": "0.1.0",
   "description": "Skills for managing SSH keys and GitHub connections with ssv.",
+  "interface": {
+    "displayName": "ssv plugin"
+  },
   "skills": "./skills/",
   "author": {
     "name": "akitorahayashi"

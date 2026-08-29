@@ -60,5 +60,5 @@ ssh <USERNAME>
 |---|---|
 | `ssv authorize` で接続拒否される | IP が正しく、到達可能か確認する |
 | `ssh <USERNAME>` で `Permission denied` | `ssv authorize <USERNAME>` を再実行する |
-| `ssv generate` でホストが既に存在する | ユーザーに確認のうえ `ssv remove <USERNAME>` を実行し再生成する |
-| `ssv audit` で不整合が報告される | 指摘内容に従い、不足コンポーネントのみ再生成する |
+| `ssv generate` でホストが既に存在する | `ssv show <USERNAME>` で既存鍵を表示し接続確認する。IP/ユーザー変更時は `ssv set` を使用し、明示的な鍵更新時のみユーザー確認後に `ssv remove` して再生成する |
+| `ssv audit` で不整合が報告される | 設定の修正は `ssv set` を使用し、鍵ペアの不整合・欠損時のみユーザー確認後に `ssv remove` 経由で再生成する |
