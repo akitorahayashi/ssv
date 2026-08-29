@@ -1,99 +1,61 @@
 # ssv
 
-`ssv` is a standalone Rust CLI for managing SSH key pairs and host configuration files under `~/.ssh/conf.d/`. It bootstraps the required SSH layout, generates keys via `ssh-keygen`, installs public keys on remote servers via `ssh-copy-id`, updates managed host settings, relinks repository remotes to managed SSH hosts, lists managed hosts, prints public keys, audits managed assets, and removes credentials when they are no longer needed.
+`ssv` は `~/.ssh/conf.d/` 配下で SSH 鍵ペアおよびホスト設定ファイルを管理する Rust 製 CLI ツールです。必要な SSH 設定レイアウトのブートストラップ、`ssh-keygen` による鍵生成、`ssh-copy-id` を介したリモートサーバーへの公開鍵設置、管理ホスト設定の更新、リポジトリリモートの書き換え、管理ホスト一覧の表示、公開鍵の表示、アセットの監査、資格情報の削除を扱います。
 
-## Features
+## 機能
 
-- Secure bootstrap: `ssv init` (alias: `i`) ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
-- Key generation: `ssv generate` (alias: `g`) wraps `ssh-keygen`, writes host-specific configs, and prints the public key so it can be registered immediately.
-- Public key installation: `ssv authorize <HOST>` (alias: `az`) wraps `ssh-copy-id`, installing the managed public key into a reachable server's `authorized_keys` using the user, hostname, and port from the managed config.
-- Setting updates: `ssv set <HOST>` (alias: `s`) rewrites the `HostName`, user, or port of an existing managed host without regenerating keys.
-- Repository relinking: `ssv link <HOST>` (alias: `ln`) rewrites the current repository's `origin` URL to use a managed SSH host.
-- Inventory awareness: `ssv list` (alias: `ls`) scans managed configs and shows the hostnames under management.
-- Public key lookup: `ssv show <HOST>` (alias: `sw`) prints the public key referenced by a managed host config.
-- Read-only audit: `ssv audit` (alias: `au`) reports missing assets, unsafe permissions, key mismatches, and other inconsistencies without modifying files.
-- Safe teardown: `ssv remove` (alias: `rm`) deletes only the key pair referenced by the managed host config.
-- Agentless: generated configurations use explicit `IdentityFile` paths, so `ssh-agent` and reboots are not required.
+- 初期化: `ssv init` (エイリアス: `i`) により `~/.ssh`、`~/.ssh/conf.d`、`~/.ssh/config` の準備状態が保証されます。
+- 鍵生成: `ssv generate` (エイリアス: `g`) により `ssh-keygen` のラッパーとしてホスト固有設定と鍵ペアが生成されます。
+- 公開鍵設置: `ssv authorize <HOST>` (エイリアス: `az`) により `ssh-copy-id` を介してリモートの `authorized_keys` に公開鍵が設置されます。
+- 設定更新: `ssv set <HOST>` (エイリアス: `s`) により既存の管理ホストの `HostName`、`User`、`Port` が更新されます。
+- リポジトリ連携: `ssv link <HOST>` (エイリアス: `ln`) によりリポジトリの `origin` URL が管理ホストへ書き換えられます。
+- 一覧表示: `ssv list` (エイリアス: `ls`) により管理下のホスト一覧が表示されます。
+- 公開鍵表示: `ssv show <HOST>` (エイリアス: `sw`) により管理ホストの公開鍵が表示されます。
+- 監査: `ssv audit` (エイリアス: `au`) によりアセットの欠損やパーミッション不整合が読み取り専用で検査されます。
+- 削除: `ssv remove` (エイリアス: `rm`) により指定したホストの鍵ペアおよび設定が削除されます。
 
-## Setup
+## サブコマンド
 
-```bash
-ssv init
-```
-
-`ssv init` ensures `~/.ssh`, `~/.ssh/conf.d`, and `~/.ssh/config` are ready for `ssv`-managed hosts.
-
-## Usage
-
-```bash
-# Bootstrap SSH config integration
-ssv init
-
-# Generate keys/config for github.com
-ssv generate github.com -u git
-
-# Install a managed host's public key on a reachable server
-ssv authorize mymachine
-
-# Update the HostName, user, or port of an existing managed host
-ssv set mymachine -n 100.78.35.98
-
-# List all managed hosts
-ssv list
-
-# Print a managed host's public key
-ssv show github.com
-
-# Rewrite the current repository's origin remote to a managed host
-ssv link github.com
-
-# Audit managed SSH assets
-ssv audit
-
-# Remove keys/config for github.com
-ssv remove github.com
-```
-
-All subcommands support short aliases for convenience:
-
-| Subcommand | Alias | Description |
+| サブコマンド | エイリアス | 概要 |
 | --- | --- | --- |
-| init | i | Bootstrap the SSH configuration layout |
-| generate | g | Generate a key pair and host configuration file |
-| set | s | Update the HostName, user, or port of a managed host |
-| authorize | az | Install a managed host's public key on the remote server |
-| list | ls | List managed hosts |
-| remove | rm | Remove key pairs and configuration for a host |
-| show | sw | Print the public key for a managed host |
-| link | ln | Rewrite the current repository origin to a managed host |
-| audit | au | Inspect managed SSH assets without modifying them |
+| init | i | SSH 設定レイアウトの初期化 |
+| generate | g | 鍵ペアおよびホスト設定ファイルの生成 |
+| set | s | 管理ホストの設定更新 |
+| authorize | az | リモートサーバーへの公開鍵設置 |
+| list | ls | 管理ホストの一覧表示 |
+| remove | rm | 鍵ペアおよび設定の削除 |
+| show | sw | 公開鍵の表示 |
+| link | ln | リポジトリの origin リモート書き換え |
+| audit | au | 管理アセットの監査 |
 
-Configuration files are stored at `~/.ssh/conf.d/<HOST>.conf`, and keys follow the `~/.ssh/id_<TYPE>_<HOST>` naming convention. Optional `-t/--type`, `-u/--user`, `-p/--port`, and `-n/--hostname` flags let you customise the generated configuration.
+## エージェントプラグイン
 
-`list`, `show`, and `audit` are read-only. `audit` writes findings to standard error and exits non-zero when error-level findings exist. `authorize` reaches the remote server and requires it to be running an SSH daemon; it prompts for the server password once to install the key.
+`plugin/` ディレクトリには、AI エージェント（Claude Code および Codex）向けの Agent Skills プラグインが含まれます。
 
-For the end-to-end flow of logging into a remote machine (server preparation, `authorize`, address updates, Tailscale, and phones), see [docs/remote-login.md](docs/remote-login.md).
+### ディレクトリ構造
 
-### Managing Multiple Accounts
-
-You can use `ssv` to manage multiple accounts for the same service (e.g., personal and work GitHub accounts) by keeping your main account as the default domain and creating an alias for your secondary account.
-
-```bash
-# Personal (Main account): Use the standard domain
-ssv generate github.com -u git
-
-# Work (Sub account): Create an alias and specify the HostName
-ssv generate github.com-w -n github.com -u git
+```text
+plugin/
+├── .claude-plugin/
+│   └── plugin.json
+├── .codex-plugin/
+│   └── plugin.json
+└── skills/
+    ├── github-ssh-setup/
+    │   ├── SKILL.md
+    │   └── agents/openai.yaml
+    └── ip-ssh-setup/
+        ├── SKILL.md
+        └── agents/openai.yaml
 ```
 
-When cloning repositories, use the standard URL for your personal account, and replace the domain with the alias for your work account:
+### 提供スキル
 
-```bash
-# Personal
-git clone git@github.com:username/repo.git
+| スキル名 | 引数ヒント | 概要 |
+| --- | --- | --- |
+| github-ssh-setup | `<HOST>` | `ssv` を使用した GitHub 用 SSH ホストの構築および公開鍵登録 |
+| ip-ssh-setup | `<IP> <USERNAME>` | IP アドレスとユーザー名を指定した SSH 接続ホストの構築 |
 
-# Work
-git clone git@github.com-w:orgname/repo.git
-```
+## 配置規則
 
-For an existing local checkout, run `ssv link github.com-w` from anywhere inside the repository to rewrite its `origin` remote to the managed host alias.
+設定ファイルは `~/.ssh/conf.d/<HOST>.conf` に保存され、鍵ペアは `~/.ssh/id_<TYPE>_<HOST>` の命名規則に従います。生成される設定は `-t/--type`、`-u/--user`、`-p/--port`、`-n/--hostname` の各オプションに対応します。

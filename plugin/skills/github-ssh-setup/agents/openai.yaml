@@ -1,0 +1,6 @@
+interface:
+  display_name: "GitHub SSH Setup"
+  short_description: "ssv で GitHub SSH 接続用の鍵と設定を生成する"
+
+policy:
+  allow_implicit_invocation: false

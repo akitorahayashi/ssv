@@ -1,0 +1,6 @@
+interface:
+  display_name: "IP SSH Setup"
+  short_description: "ssv で IP 指定の SSH 設定を登録する"
+
+policy:
+  allow_implicit_invocation: false
