@@ -1,5 +1,5 @@
 use crate::error::{AppError, IoResultExt};
-use crate::ssh::naming::{self, ManagedKeyName};
+use crate::ssh::naming::{self, HostIdentifier, ManagedKeyName};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -36,7 +36,7 @@ impl Layout {
         self.root().join("conf.d")
     }
 
-    pub(crate) fn host_config(&self, host: &str) -> PathBuf {
+    pub(crate) fn host_config(&self, host: &HostIdentifier) -> PathBuf {
         self.hosts().join(format!("{host}.conf"))
     }
 
@@ -64,7 +64,11 @@ impl Layout {
         }
     }
 
-    pub(crate) fn require_host_identity(&self, path: &Path, host: &str) -> Result<(), AppError> {
+    pub(crate) fn require_host_identity(
+        &self,
+        path: &Path,
+        host: &HostIdentifier,
+    ) -> Result<(), AppError> {
         self.require_managed(path)?;
         naming::managed_key_type(path, host).map(|_| ())
     }

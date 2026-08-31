@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::error::AppError;
-use crate::ssh::host_config::{self, HostConfig};
-use crate::ssh::naming::{self, ManagedKeyName};
+use crate::ssh::host_config;
+use crate::ssh::naming::{HostIdentifier, Hostname, ManagedKeyName, RemoteUser};
 
 pub(crate) fn execute(
     ctx: &Context,
@@ -15,25 +15,19 @@ pub(crate) fn execute(
             "specify at least one of --hostname, --user, or --port to update",
         ));
     }
-    naming::validate_host(host)?;
-    if let Some(hostname) = hostname {
-        naming::validate_hostname(hostname)?;
-    }
-    if let Some(user) = user {
-        naming::validate_user(user)?;
-    }
+    let host = HostIdentifier::new(host)?;
+    let hostname = hostname.map(Hostname::new).transpose()?;
+    let user = user.map(RemoteUser::new).transpose()?;
     let layout = ctx.layout();
-    let config = host_config::load(layout, host)?;
-    layout.require_host_identity(&config.identity, host)?;
-    let key_type = naming::managed_key_type(&config.identity, host)?;
-    let key_name = ManagedKeyName::new(&key_type, host)?;
+    let config = host_config::load(layout, &host)?;
+    let key_type = crate::ssh::naming::managed_key_type(&config.private_key, &host)?;
+    let key_name = ManagedKeyName::new(&key_type, host.clone())?;
 
-    let new_hostname =
-        hostname.map(str::to_string).or(config.hostname).unwrap_or_else(|| host.to_string());
-    let new_user = user.map(str::to_string).or(config.user);
+    let new_hostname = hostname.unwrap_or(config.hostname);
+    let new_user = user.or(config.user);
     let new_port = port.or(config.port);
 
-    let rendered = HostConfig::render(&key_name, &new_hostname, new_user.as_deref(), new_port);
-    host_config::write(&layout.host_config(host), &rendered)?;
-    Ok(new_hostname)
+    let rendered = host_config::render(&key_name, &new_hostname, new_user.as_ref(), new_port);
+    host_config::write(&layout.host_config(&host), &rendered)?;
+    Ok(new_hostname.to_string())
 }

@@ -1,5 +1,5 @@
 use crate::error::{AppError, IoResultExt};
-use crate::ssh::host_config::has_managed_include;
+use crate::ssh::host_config::{directive_name, has_managed_include};
 use crate::ssh::layout::Layout;
 use crate::ssh::permissions;
 use std::fmt::{self, Display};
@@ -124,7 +124,7 @@ fn requires_mode_update(metadata: &fs::Metadata, expected: u32) -> bool {
 fn first_block_offset(contents: &str) -> Option<usize> {
     let mut offset = 0;
     for line in contents.split_inclusive('\n') {
-        let name = line.split_whitespace().next();
+        let name = directive_name(line);
         if name.is_some_and(|name| {
             name.eq_ignore_ascii_case("Host") || name.eq_ignore_ascii_case("Match")
         }) {

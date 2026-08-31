@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
 use crate::ssh::host_config;
-use crate::ssh::naming;
+use crate::ssh::naming::HostIdentifier;
 use std::fs;
 use std::path::Path;
 
@@ -24,20 +24,18 @@ impl RemovalStatus {
 }
 
 pub(crate) fn execute(ctx: &Context, host: &str) -> Result<RemovalStatus, AppError> {
-    naming::validate_host(host)?;
+    let host = HostIdentifier::new(host)?;
     let layout = ctx.layout();
-    let config = host_config::load(layout, host)?;
-    layout.require_host_identity(&config.identity, host)?;
-    let public = layout.public_key(&config.identity)?;
+    let config = host_config::load(layout, &host)?;
 
-    let config_path = layout.host_config(host);
+    let config_path = layout.host_config(&host);
     fs::remove_file(&config_path).path_ctx(&config_path)?;
 
     let mut missing = 0;
-    if !remove_if_present(&config.identity)? {
+    if !remove_if_present(&config.private_key)? {
         missing += 1;
     }
-    if !remove_if_present(&public)? {
+    if !remove_if_present(&config.public_key)? {
         missing += 1;
     }
 

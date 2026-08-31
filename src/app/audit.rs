@@ -1,6 +1,6 @@
 use crate::context::Context;
 use crate::error::AppError;
-use crate::ssh::host_config::{HostConfig, has_managed_include};
+use crate::ssh::host_config::{ManagedHost, has_managed_include};
 use crate::ssh::keygen;
 use crate::ssh::layout::Layout;
 use crate::ssh::naming;
@@ -187,28 +187,31 @@ impl Audit {
                 return;
             }
         };
-        let config = match HostConfig::parse(&contents, &self.layout) {
+        let Some(host) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            self.report.error(AuditCode::ConfigParse, path, "host config has no UTF-8 filename");
+            return;
+        };
+        let host = match naming::HostIdentifier::new(host) {
+            Ok(host) => host,
+            Err(error) => {
+                self.report.error(AuditCode::ConfigParse, path, error.to_string());
+                return;
+            }
+        };
+        let config = match ManagedHost::parse(&contents, &self.layout, host, path.to_path_buf()) {
             Ok(config) => config,
             Err(error) => {
-                let code = if matches!(error, AppError::OutsideManagedRoot(_)) {
-                    AuditCode::OutsideManagedRoot
-                } else {
-                    AuditCode::ConfigParse
+                let code = match &error {
+                    AppError::OutsideManagedRoot(_) => AuditCode::OutsideManagedRoot,
+                    AppError::UnmanagedIdentity(_) => AuditCode::UnmanagedIdentity,
+                    _ => AuditCode::ConfigParse,
                 };
                 self.report.error(code, path, error.to_string());
                 return;
             }
         };
-        let Some(host) = path.file_stem().and_then(|stem| stem.to_str()) else {
-            self.report.error(AuditCode::ConfigParse, path, "host config has no UTF-8 filename");
-            return;
-        };
-        if let Err(error) = self.layout.require_host_identity(&config.identity, host) {
-            self.report.error(AuditCode::UnmanagedIdentity, path, error.to_string());
-            return;
-        }
-        self.referenced_keys.insert(config.identity.clone());
-        self.inspect_private_key(&config.identity);
+        self.referenced_keys.insert(config.private_key.clone());
+        self.inspect_private_key(&config.private_key);
     }
 
     fn inspect_private_key(&mut self, private: &Path) {

@@ -4,11 +4,7 @@ use predicates::prelude::*;
 #[test]
 fn authorize_invokes_ssh_copy_id_with_config_values() {
     let context = TestContext::new();
-    context
-        .cli()
-        .args(["generate", "mmn", "-n", "mmn.local", "-u", "admin", "-p", "2022"])
-        .assert()
-        .success();
+    context.write_managed_host_with("mmn", "mmn.local", "ed25519", Some("admin"), Some(2022));
 
     context
         .cli()
@@ -30,7 +26,7 @@ fn authorize_invokes_ssh_copy_id_with_config_values() {
 #[test]
 fn authorize_targets_hostname_only_without_user() {
     let context = TestContext::new();
-    context.cli().args(["generate", "box", "-n", "box.example"]).assert().success();
+    context.write_managed_host_with("box", "box.example", "ed25519", None, None);
 
     context
         .cli()

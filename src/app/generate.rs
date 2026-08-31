@@ -1,9 +1,9 @@
 use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
 use crate::ssh::bootstrap;
-use crate::ssh::host_config::{self, HostConfig};
+use crate::ssh::host_config;
 use crate::ssh::keygen;
-use crate::ssh::naming::{self, ManagedKeyName};
+use crate::ssh::naming::{HostIdentifier, Hostname, ManagedKeyName, RemoteUser};
 use crate::ssh::permissions;
 use std::fs;
 use std::path::Path;
@@ -16,20 +16,15 @@ pub(crate) fn execute(
     user: Option<&str>,
     port: Option<u16>,
 ) -> Result<String, AppError> {
-    naming::validate_host(host)?;
-    if let Some(hn) = hostname {
-        naming::validate_hostname(hn)?;
-    }
-    if let Some(user) = user {
-        naming::validate_user(user)?;
-    }
-    naming::validate_key_type(key_type)?;
-    let key_name = ManagedKeyName::new(key_type, host)?;
+    let host = HostIdentifier::new(host)?;
+    let hostname = Hostname::new(hostname.unwrap_or(host.as_str()))?;
+    let user = user.map(RemoteUser::new).transpose()?;
+    let key_name = ManagedKeyName::new(key_type, host.clone())?;
     let layout = ctx.layout();
     bootstrap::ensure_bootstrap(layout)?;
 
     let (private, public) = layout.key_pair(&key_name);
-    let config = layout.host_config(host);
+    let config = layout.host_config(&host);
     if layout.artifact_exists(&private)?
         || layout.artifact_exists(&public)?
         || layout.artifact_exists(&config)?
@@ -39,12 +34,13 @@ pub(crate) fn execute(
         )));
     }
 
-    let target_hostname = hostname.unwrap_or(host);
-
     keygen::generate(ctx.keygen(), key_type, &private)?;
     let result = (|| {
         permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
-        host_config::write(&config, &HostConfig::render(&key_name, target_hostname, user, port))?;
+        host_config::write(
+            &config,
+            &host_config::render(&key_name, &hostname, user.as_ref(), port),
+        )?;
         fs::read_to_string(&public).path_ctx(&public)
     })();
     match result {

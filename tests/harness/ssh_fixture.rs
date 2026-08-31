@@ -29,9 +29,46 @@ impl TestContext {
     }
 
     pub fn prepare_include(&self) {
+        fs::create_dir_all(self.hosts_dir()).expect("hosts directory should exist");
+        self.set_mode(&self.ssh_root(), 0o700);
+        self.set_mode(&self.hosts_dir(), 0o700);
         fs::write(self.main_config(), "Include ~/.ssh/conf.d/*.conf\n")
             .expect("main config should be written");
         self.set_mode(&self.main_config(), 0o600);
+    }
+
+    pub fn write_managed_host(&self, host: &str) {
+        self.write_managed_host_with(host, host, "ed25519", None, None);
+    }
+
+    pub fn write_managed_host_with(
+        &self,
+        host: &str,
+        hostname: &str,
+        key_type: &str,
+        user: Option<&str>,
+        port: Option<u16>,
+    ) {
+        self.prepare_include();
+        fs::write(self.private_key(key_type, host), format!("PRIVATE-{key_type}\n"))
+            .expect("private key should be written");
+        fs::write(
+            self.public_key(key_type, host),
+            format!("ssh-{key_type} AAAATESTKEY {key_type}@fixture\n"),
+        )
+        .expect("public key should be written");
+        self.set_mode(&self.private_key(key_type, host), 0o600);
+
+        let mut config = format!("Host {host}\nHostName {hostname}\n");
+        if let Some(user) = user {
+            config.push_str(&format!("User {user}\n"));
+        }
+        if let Some(port) = port {
+            config.push_str(&format!("Port {port}\n"));
+        }
+        config.push_str(&format!("IdentityFile ~/.ssh/id_{key_type}_{host}\nIdentitiesOnly yes\n"));
+        fs::write(self.host_config(host), config).expect("host config should be written");
+        self.set_mode(&self.host_config(host), 0o600);
     }
 
     pub fn write_host_config(&self, host: &str, identity: &str) {

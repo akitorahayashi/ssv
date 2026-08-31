@@ -4,8 +4,8 @@ use predicates::prelude::*;
 #[test]
 fn list_outputs_managed_hosts() {
     let context = TestContext::new();
-    context.cli().args(["generate", "alpha.test"]).assert().success();
-    context.cli().args(["generate", "beta.test"]).assert().success();
+    context.write_managed_host("alpha.test");
+    context.write_managed_host("beta.test");
 
     context
         .cli()

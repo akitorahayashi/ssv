@@ -21,6 +21,8 @@ pub enum AppError {
     ValidationError(String),
     /// Indicates a path outside the directory owned by ssv.
     OutsideManagedRoot(PathBuf),
+    /// Indicates that a managed document references an identity not owned by its host.
+    UnmanagedIdentity(String),
     /// A spawned command exited with a non-zero status code.
     CommandFailed { program: String, status: ExitStatus },
 }
@@ -45,6 +47,7 @@ impl Display for AppError {
             AppError::OutsideManagedRoot(path) => {
                 write!(f, "Path '{}' is outside the managed SSH directory", path.display())
             }
+            AppError::UnmanagedIdentity(message) => write!(f, "{message}"),
             AppError::CommandFailed { program, status } => {
                 write!(f, "Command '{program}' exited with status {status}")
             }
@@ -62,6 +65,7 @@ impl Error for AppError {
             | AppError::BootstrapRequired(_)
             | AppError::ValidationError(_)
             | AppError::OutsideManagedRoot(_)
+            | AppError::UnmanagedIdentity(_)
             | AppError::CommandFailed { .. } => None,
         }
     }
@@ -82,6 +86,10 @@ impl AppError {
 
     pub(crate) fn bootstrap_missing(path: PathBuf) -> Self {
         AppError::BootstrapRequired(path)
+    }
+
+    pub(crate) fn unmanaged_identity<S: Into<String>>(message: S) -> Self {
+        AppError::UnmanagedIdentity(message.into())
     }
 
     pub(crate) fn rolled_back(error: AppError) -> Self {

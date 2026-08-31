@@ -9,16 +9,12 @@ fn link_updates_remote_url_from_ssh() {
     let context = TestContext::new();
     let host = "github.com-work";
 
-    // Setup ssv host
-    context.cli().arg("init").assert().success();
-    context.cli().arg("generate").arg(host).assert().success();
+    context.write_managed_host(host);
 
-    // Setup repository
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
     init_repository_with_origin(&repo_dir, "git@github.com:org/repo.git");
 
-    // Run ssv link
     context
         .cli()
         .arg("link")
@@ -37,16 +33,12 @@ fn link_updates_remote_url_from_https() {
     let context = TestContext::new();
     let host = "github.com-work";
 
-    // Setup ssv host
-    context.cli().arg("init").assert().success();
-    context.cli().arg("generate").arg(host).assert().success();
+    context.write_managed_host(host);
 
-    // Setup repository
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
     init_repository_with_origin(&repo_dir, "https://github.com/org/repo.git");
 
-    // Run ssv link
     context
         .cli()
         .arg("link")
@@ -83,8 +75,7 @@ fn link_fails_if_host_not_found() {
 fn link_fails_if_not_git_repo() {
     let context = TestContext::new();
     let host = "github.com";
-    context.cli().arg("init").assert().success();
-    context.cli().arg("generate").arg(host).assert().success();
+    context.write_managed_host(host);
 
     let non_repo_dir = context.home().join("not-a-repo");
     fs::create_dir(&non_repo_dir).unwrap();
@@ -98,8 +89,7 @@ fn link_fails_if_not_git_repo() {
 fn link_fails_if_no_origin_remote() {
     let context = TestContext::new();
     let host = "github.com";
-    context.cli().arg("init").assert().success();
-    context.cli().arg("generate").arg(host).assert().success();
+    context.write_managed_host(host);
 
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();
@@ -119,8 +109,7 @@ fn link_fails_if_no_origin_remote() {
 fn link_fails_on_unsupported_url_format() {
     let context = TestContext::new();
     let host = "github.com";
-    context.cli().arg("init").assert().success();
-    context.cli().arg("generate").arg(host).assert().success();
+    context.write_managed_host(host);
 
     let repo_dir = context.home().join("repo");
     fs::create_dir(&repo_dir).unwrap();

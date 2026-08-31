@@ -5,9 +5,8 @@ use std::fs;
 #[test]
 fn mismatched_public_key_is_reported() {
     let context = TestContext::new();
+    context.write_managed_host("mismatch.test");
     let ctx = context.ctx();
-    ctx.generate("mismatch.test", None, "ed25519", None, None).expect("generate should succeed");
-    context.prepare_include();
     fs::write(context.public_key("ed25519", "mismatch.test"), "ssh-ed25519 DIFFERENT\n")
         .expect("public key should be replaced");
 

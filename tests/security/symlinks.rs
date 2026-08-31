@@ -8,9 +8,8 @@ fn public_key_symlink_is_rejected_and_reported() {
     use std::os::unix::fs::symlink;
 
     let context = TestContext::new();
+    context.write_managed_host("symlink.test");
     let ctx = context.ctx();
-    ctx.generate("symlink.test", None, "ed25519", None, None).expect("generate should succeed");
-    context.prepare_include();
     let public = context.public_key("ed25519", "symlink.test");
     let outside = context.home().join("outside.pub");
     fs::write(&outside, "ssh-ed25519 AAAATESTKEY\n").expect("outside public key written");

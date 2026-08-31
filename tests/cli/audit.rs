@@ -4,8 +4,7 @@ use predicates::prelude::*;
 #[test]
 fn audit_succeeds_for_healthy_assets() {
     let context = TestContext::new();
-    context.cli().args(["generate", "healthy.test"]).assert().success();
-    context.prepare_include();
+    context.write_managed_host("healthy.test");
 
     context.cli().arg("audit").assert().success().stdout("SSH assets are healthy\n").stderr("");
 }
@@ -21,7 +20,7 @@ fn audit_reports_findings_to_stderr_and_fails() {
 #[cfg(unix)]
 fn audit_reports_warning_only_assets_without_claiming_health() {
     let context = TestContext::new();
-    context.cli().args(["generate", "warning.test"]).assert().success();
+    context.write_managed_host("warning.test");
     context.set_mode(&context.host_config("warning.test"), 0o400);
 
     context

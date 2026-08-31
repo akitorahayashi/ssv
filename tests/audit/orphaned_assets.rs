@@ -19,8 +19,8 @@ fn standard_ssh_keys_are_not_reported_as_orphaned() {
 #[test]
 fn unreferenced_ssv_key_is_reported_as_orphaned() {
     let context = TestContext::new();
+    context.write_managed_host("orphan.test");
     let ctx = context.ctx();
-    ctx.generate("orphan.test", None, "ed25519", None, None).expect("generate should succeed");
     fs::remove_file(context.host_config("orphan.test")).expect("host config should be removed");
 
     let report = ctx.audit().expect("audit should succeed");
