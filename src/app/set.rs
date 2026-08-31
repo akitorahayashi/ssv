@@ -28,6 +28,6 @@ pub(crate) fn execute(
     let new_port = port.or(config.port);
 
     let rendered = host_config::render(&key_name, &new_hostname, new_user.as_ref(), new_port);
-    host_config::write(&layout.host_config(&host), &rendered)?;
+    host_config::replace(&layout.host_config(&host), &rendered)?;
     Ok(new_hostname.to_string())
 }

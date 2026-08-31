@@ -1,9 +1,8 @@
 use crate::error::{AppError, IoResultExt};
+use crate::ssh::atomic_file;
 use crate::ssh::layout::Layout;
 use crate::ssh::naming::{HostIdentifier, Hostname, ManagedKeyName, RemoteUser};
-use crate::ssh::permissions;
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -138,11 +137,12 @@ pub(crate) fn load(layout: &Layout, host: &HostIdentifier) -> Result<ManagedHost
     ManagedHost::parse(&contents, layout, host.clone(), path)
 }
 
-pub(crate) fn write(path: &Path, contents: &str) -> Result<(), AppError> {
-    let mut file = fs::File::create(path).path_ctx(path)?;
-    file.write_all(contents.as_bytes()).path_ctx(path)?;
-    file.sync_all().path_ctx(path)?;
-    permissions::set_mode(path, permissions::PRIVATE_MODE)
+pub(crate) fn create(path: &Path, contents: &str) -> Result<(), AppError> {
+    atomic_file::create(path, contents)
+}
+
+pub(crate) fn replace(path: &Path, contents: &str) -> Result<(), AppError> {
+    atomic_file::replace(path, contents)
 }
 
 fn required_single<T>(values: Vec<T>, name: &str) -> Result<T, AppError> {

@@ -1,12 +1,13 @@
 use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
+use crate::ssh::atomic_file;
 use crate::ssh::bootstrap;
 use crate::ssh::host_config;
 use crate::ssh::keygen;
 use crate::ssh::naming::{HostIdentifier, Hostname, ManagedKeyName, RemoteUser};
 use crate::ssh::permissions;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub(crate) fn execute(
     ctx: &Context,
@@ -34,26 +35,81 @@ pub(crate) fn execute(
         )));
     }
 
-    keygen::generate(ctx.keygen(), key_type, &private)?;
-    let result = (|| {
-        permissions::set_mode(&private, permissions::PRIVATE_MODE)?;
-        host_config::write(
-            &config,
-            &host_config::render(&key_name, &hostname, user.as_ref(), port),
-        )?;
-        fs::read_to_string(&public).path_ctx(&public)
-    })();
-    match result {
-        Ok(public_key) => Ok(public_key),
+    let staged_private = atomic_file::reserve_path(&layout.root(), ".ssv-key-")?;
+    let staged_public = layout.public_key(&staged_private)?;
+    if let Err(error) = keygen::generate(ctx.keygen(), key_type, &staged_private) {
+        return Err(rollback(error, [staged_public.as_path(), staged_private.as_path()]));
+    }
+
+    let prepared = prepare_key_pair(ctx, &staged_private, &staged_public);
+    let public_key = match prepared {
+        Ok(public_key) => public_key,
         Err(error) => {
-            remove_generated_artifacts([config.as_path(), public.as_path(), private.as_path()]);
-            Err(AppError::rolled_back(error))
+            return Err(rollback(error, [staged_public.as_path(), staged_private.as_path()]));
         }
+    };
+
+    if let Err(error) = atomic_file::publish_noclobber(&staged_private, &private) {
+        let mut paths = vec![staged_public.clone(), staged_private.clone()];
+        if error.is_committed() {
+            paths.push(private.clone());
+        }
+        return Err(rollback(error, paths.iter().map(PathBuf::as_path)));
+    }
+    if let Err(error) = atomic_file::publish_noclobber(&staged_public, &public) {
+        let mut paths = vec![private.clone(), staged_public.clone()];
+        if error.is_committed() {
+            paths.push(public.clone());
+        }
+        return Err(rollback(error, paths.iter().map(PathBuf::as_path)));
+    }
+
+    let rendered = host_config::render(&key_name, &hostname, user.as_ref(), port);
+    match host_config::create(&config, &rendered) {
+        Ok(()) => Ok(public_key),
+        Err(error) if error.is_committed() => Err(error),
+        Err(error) => Err(rollback(error, [public.as_path(), private.as_path()])),
     }
 }
 
-fn remove_generated_artifacts<const N: usize>(paths: [&Path; N]) {
-    for path in paths {
-        let _ = fs::remove_file(path);
+fn prepare_key_pair(
+    ctx: &Context,
+    staged_private: &Path,
+    staged_public: &Path,
+) -> Result<String, AppError> {
+    let layout = ctx.layout();
+    layout.require_regular_file(staged_private)?;
+    layout.require_regular_file(staged_public)?;
+    permissions::set_mode(staged_private, permissions::PRIVATE_MODE)?;
+    let public_key = fs::read_to_string(staged_public).path_ctx(staged_public)?;
+    let derived = keygen::derive_public(ctx.keygen(), staged_private)?;
+    let actual = key_fields(&public_key).ok_or_else(|| {
+        AppError::validation("generated public key does not contain algorithm and key fields")
+    })?;
+    let expected = key_fields(&derived).ok_or_else(|| {
+        AppError::validation("derived public key does not contain algorithm and key fields")
+    })?;
+    if actual != expected {
+        return Err(AppError::validation(
+            "generated public key does not match the generated private key",
+        ));
     }
+    Ok(public_key)
+}
+
+fn key_fields(contents: &str) -> Option<(&str, &str)> {
+    let mut fields = contents.split_whitespace();
+    Some((fields.next()?, fields.next()?))
+}
+
+fn rollback<'a>(primary: AppError, paths: impl IntoIterator<Item = &'a Path>) -> AppError {
+    let mut cleanup = Vec::new();
+    for path in paths {
+        match fs::remove_file(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => cleanup.push(AppError::io(path, error)),
+        }
+    }
+    AppError::with_cleanup(AppError::rolled_back(primary), cleanup)
 }

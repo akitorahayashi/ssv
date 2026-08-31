@@ -98,6 +98,65 @@ impl TestContext {
         keygen
     }
 
+    pub fn install_failing_keygen(&self, writes_public: bool) -> PathBuf {
+        let name = if writes_public { "failing-pair-keygen" } else { "failing-private-keygen" };
+        let keygen = self.home().join(name);
+        let public_write = if writes_public {
+            "printf 'ssh-ed25519 AAAATESTKEY failing@fixture\\n' > \"${outfile}.pub\"\n"
+        } else {
+            ""
+        };
+        fs::write(
+            &keygen,
+            format!(
+                "#!/usr/bin/env sh\nset -eu\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-f\" ]; then\n    shift\n    outfile=\"$1\"\n  fi\n  shift\ndone\nprintf 'PRIVATE-ed25519\\n' > \"$outfile\"\n{public_write}echo 'injected keygen failure' >&2\nexit 23\n"
+            ),
+        )
+        .expect("failing keygen should be written");
+        self.set_mode(&keygen, 0o755);
+        keygen
+    }
+
+    pub fn install_config_conflict_keygen(&self, host: &str) -> PathBuf {
+        let keygen = self.home().join("config-conflict-keygen");
+        fs::write(
+            &keygen,
+            format!(
+                r#"#!/usr/bin/env sh
+set -eu
+outfile=""
+derive="false"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -f)
+      shift
+      outfile="$1"
+      ;;
+    -y)
+      derive="true"
+      ;;
+    -P)
+      shift
+      ;;
+  esac
+  shift
+done
+if [ "$derive" = "true" ]; then
+  printf 'ssh-ed25519 AAAATESTKEY\n'
+  exit 0
+fi
+printf 'PRIVATE-ed25519\n' > "$outfile"
+printf 'ssh-ed25519 AAAATESTKEY conflict@fixture\n' > "${{outfile}}.pub"
+root="${{outfile%/*}}"
+printf 'external config\n' > "${{root}}/conf.d/{host}.conf"
+"#
+            ),
+        )
+        .expect("conflicting keygen should be written");
+        self.set_mode(&keygen, 0o755);
+        keygen
+    }
+
     pub fn set_mode(&self, path: &std::path::Path, mode: u32) {
         let mut permissions = fs::metadata(path).expect("metadata should exist").permissions();
         permissions.set_mode(mode);

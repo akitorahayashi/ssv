@@ -17,12 +17,16 @@ pub enum AppError {
     BootstrapRequired(PathBuf),
     /// Indicates that a command rolled back partial SSH assets after a failure.
     RolledBack(Box<AppError>),
+    /// Indicates that cleanup also failed while handling a primary failure.
+    CleanupFailed { primary: Box<AppError>, cleanup: Vec<AppError> },
     /// Indicates a validation problem with user-provided arguments or derived data.
     ValidationError(String),
     /// Indicates a path outside the directory owned by ssv.
     OutsideManagedRoot(PathBuf),
     /// Indicates that a managed document references an identity not owned by its host.
     UnmanagedIdentity(String),
+    /// Indicates that a pathname was published but its final durability step failed.
+    CommittedIo { path: PathBuf, action: String, source: io::Error },
     /// A spawned command exited with a non-zero status code.
     CommandFailed { program: String, status: ExitStatus },
 }
@@ -43,11 +47,21 @@ impl Display for AppError {
             AppError::RolledBack(error) => {
                 write!(f, "Rolled back partial SSH assets due to failure: {error}")
             }
+            AppError::CleanupFailed { primary, cleanup } => {
+                write!(f, "{primary}; cleanup also failed")?;
+                for error in cleanup {
+                    write!(f, ": {error}")?;
+                }
+                Ok(())
+            }
             AppError::ValidationError(message) => write!(f, "{message}"),
             AppError::OutsideManagedRoot(path) => {
                 write!(f, "Path '{}' is outside the managed SSH directory", path.display())
             }
             AppError::UnmanagedIdentity(message) => write!(f, "{message}"),
+            AppError::CommittedIo { path, action, source } => {
+                write!(f, "{} was published but {action} failed: {source}", path.display())
+            }
             AppError::CommandFailed { program, status } => {
                 write!(f, "Command '{program}' exited with status {status}")
             }
@@ -60,6 +74,8 @@ impl Error for AppError {
         match self {
             AppError::Io { source, .. } => Some(source),
             AppError::RolledBack(error) => Some(error.as_ref()),
+            AppError::CleanupFailed { primary, .. } => Some(primary.as_ref()),
+            AppError::CommittedIo { source, .. } => Some(source),
             AppError::ConfigError(_)
             | AppError::HostNotFound(_)
             | AppError::BootstrapRequired(_)
@@ -94,6 +110,22 @@ impl AppError {
 
     pub(crate) fn rolled_back(error: AppError) -> Self {
         AppError::RolledBack(Box::new(error))
+    }
+
+    pub(crate) fn with_cleanup(primary: AppError, cleanup: Vec<AppError>) -> Self {
+        if cleanup.is_empty() {
+            primary
+        } else {
+            AppError::CleanupFailed { primary: Box::new(primary), cleanup }
+        }
+    }
+
+    pub(crate) fn committed_io(path: &Path, action: &str, source: io::Error) -> Self {
+        AppError::CommittedIo { path: path.to_path_buf(), action: action.to_string(), source }
+    }
+
+    pub(crate) fn is_committed(&self) -> bool {
+        matches!(self, AppError::CommittedIo { .. })
     }
 
     pub(crate) fn command_failed(program: &str, status: ExitStatus) -> Self {

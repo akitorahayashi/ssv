@@ -27,9 +27,8 @@ pub(crate) fn execute(ctx: &Context, host: &str) -> Result<RemovalStatus, AppErr
     let host = HostIdentifier::new(host)?;
     let layout = ctx.layout();
     let config = host_config::load(layout, &host)?;
-
-    let config_path = layout.host_config(&host);
-    fs::remove_file(&config_path).path_ctx(&config_path)?;
+    preflight_optional_file(layout, &config.private_key)?;
+    preflight_optional_file(layout, &config.public_key)?;
 
     let mut missing = 0;
     if !remove_if_present(&config.private_key)? {
@@ -38,8 +37,20 @@ pub(crate) fn execute(ctx: &Context, host: &str) -> Result<RemovalStatus, AppErr
     if !remove_if_present(&config.public_key)? {
         missing += 1;
     }
+    fs::remove_file(&config.path).path_ctx(&config.path)?;
 
     if missing == 0 { Ok(RemovalStatus::Removed) } else { Ok(RemovalStatus::Partial { missing }) }
+}
+
+fn preflight_optional_file(
+    layout: &crate::ssh::layout::Layout,
+    path: &Path,
+) -> Result<(), AppError> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => layout.require_regular_file(path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(AppError::io(path, error)),
+    }
 }
 
 fn remove_if_present(path: &Path) -> Result<bool, AppError> {

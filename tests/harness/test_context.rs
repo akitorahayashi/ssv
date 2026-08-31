@@ -52,4 +52,17 @@ impl TestContext {
             .env("SSV_SSH_COPY_ID_PATH", &self.copy_id_stub);
         command
     }
+
+    pub fn cli_with_permissive_umask(&self) -> Command {
+        let binary = assert_cmd::cargo::cargo_bin("ssv");
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "umask 000; exec \"$@\"", "sh"])
+            .arg(binary)
+            .current_dir(&self.work_dir)
+            .env("HOME", self.home())
+            .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub)
+            .env("SSV_SSH_COPY_ID_PATH", &self.copy_id_stub);
+        command
+    }
 }

@@ -29,7 +29,7 @@ fn remove_refuses_identity_not_owned_by_host() {
 }
 
 #[test]
-fn remove_removes_host_definition_before_key_cleanup_failure() {
+fn remove_preflights_all_targets_and_remains_retryable() {
     let context = TestContext::new();
     let ctx = context.ctx();
     ctx.generate("retry.test", None, "ed25519", None, None).expect("generate should succeed");
@@ -40,6 +40,12 @@ fn remove_removes_host_definition_before_key_cleanup_failure() {
 
     assert!(ctx.remove("retry.test").is_err());
 
+    assert!(context.host_config("retry.test").exists());
+    assert!(context.private_key("ed25519", "retry.test").exists());
+
+    fs::remove_dir(context.public_key("ed25519", "retry.test"))
+        .expect("blocking directory should be removed");
+    ctx.remove("retry.test").expect("retry should succeed");
     assert!(!context.host_config("retry.test").exists());
     assert!(!context.private_key("ed25519", "retry.test").exists());
 }

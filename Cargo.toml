@@ -9,8 +9,8 @@ repository = "https://github.com/akitorahayashi/ssv"
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 git2 = { version = "0.20", default-features = false }
+tempfile = "3.10"
 
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
-tempfile = "3.10"
