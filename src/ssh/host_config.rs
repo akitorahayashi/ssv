@@ -32,7 +32,7 @@ impl ManagedHost {
 
         for (line_index, line) in contents.lines().enumerate() {
             let Some((name, value)) = directive(line).map_err(|message| {
-                AppError::validation(format!(
+                AppError::managed_document(format!(
                     "managed host config line {}: {message}",
                     line_index + 1
                 ))
@@ -42,17 +42,19 @@ impl ManagedHost {
             };
 
             if name.eq_ignore_ascii_case("Match") {
-                return Err(AppError::validation("managed host config contains a Match block"));
+                return Err(AppError::managed_document(
+                    "managed host config contains a Match block",
+                ));
             }
             if name.eq_ignore_ascii_case("Host") {
                 if found_host {
-                    return Err(AppError::validation(
+                    return Err(AppError::managed_document(
                         "managed host config contains multiple Host blocks",
                     ));
                 }
                 let alias = scalar(value, "Host")?;
                 if alias != host.as_str() {
-                    return Err(AppError::validation(format!(
+                    return Err(AppError::managed_document(format!(
                         "managed host config Host '{alias}' does not match filename host '{host}'"
                     )));
                 }
@@ -60,7 +62,7 @@ impl ManagedHost {
                 continue;
             }
             if !found_host {
-                return Err(AppError::validation(format!(
+                return Err(AppError::managed_document(format!(
                     "managed host config directive '{name}' appears before Host"
                 )));
             }
@@ -79,15 +81,20 @@ impl ManagedHost {
         }
 
         if !found_host {
-            return Err(AppError::validation("managed host config has no Host block"));
+            return Err(AppError::managed_document("managed host config has no Host block"));
         }
-        let hostname = Hostname::new(&required_single(hostnames, "HostName")?)?;
-        let user =
-            optional_single(users, "User")?.map(|value| RemoteUser::new(&value)).transpose()?;
+        let hostname = Hostname::new(&required_single(hostnames, "HostName")?)
+            .map_err(|error| AppError::managed_document(error.to_string()))?;
+        let user = optional_single(users, "User")?
+            .map(|value| {
+                RemoteUser::new(&value)
+                    .map_err(|error| AppError::managed_document(error.to_string()))
+            })
+            .transpose()?;
         let port = optional_single(ports, "Port")?
             .map(|value| {
                 value.parse::<u16>().map_err(|_| {
-                    AppError::validation(format!(
+                    AppError::managed_document(format!(
                         "managed host config has an invalid Port value '{value}'"
                     ))
                 })
@@ -98,7 +105,9 @@ impl ManagedHost {
         let public_key = layout.public_key(&private_key)?;
         let identities_only = required_single(identities_only, "IdentitiesOnly")?;
         if !identities_only.eq_ignore_ascii_case("yes") {
-            return Err(AppError::validation("managed host config requires IdentitiesOnly yes"));
+            return Err(AppError::managed_document(
+                "managed host config requires IdentitiesOnly yes",
+            ));
         }
 
         Ok(Self { host, path, hostname, user, port, private_key, public_key })
@@ -147,9 +156,11 @@ pub(crate) fn replace(path: &Path, contents: &str) -> Result<(), AppError> {
 
 fn required_single<T>(values: Vec<T>, name: &str) -> Result<T, AppError> {
     match values.len() {
-        0 => Err(AppError::validation(format!("managed host config has no {name}"))),
+        0 => Err(AppError::managed_document(format!("managed host config has no {name}"))),
         1 => Ok(values.into_iter().next().expect("one value")),
-        _ => Err(AppError::validation(format!("managed host config has multiple {name} entries"))),
+        _ => Err(AppError::managed_document(format!(
+            "managed host config has multiple {name} entries"
+        ))),
     }
 }
 
@@ -157,7 +168,9 @@ fn optional_single<T>(values: Vec<T>, name: &str) -> Result<Option<T>, AppError>
     match values.len() {
         0 => Ok(None),
         1 => Ok(values.into_iter().next()),
-        _ => Err(AppError::validation(format!("managed host config has multiple {name} entries"))),
+        _ => Err(AppError::managed_document(format!(
+            "managed host config has multiple {name} entries"
+        ))),
     }
 }
 
@@ -215,19 +228,19 @@ fn scalar<'a>(value: &'a str, name: &str) -> Result<&'a str, AppError> {
     let value = value.trim();
     if value.starts_with('"') || value.ends_with('"') {
         let Some(inner) = value.strip_prefix('"').and_then(|value| value.strip_suffix('"')) else {
-            return Err(AppError::validation(format!(
+            return Err(AppError::managed_document(format!(
                 "managed host config has malformed quotes for {name}"
             )));
         };
         if inner.contains('"') {
-            return Err(AppError::validation(format!(
+            return Err(AppError::managed_document(format!(
                 "managed host config has unsupported quoting for {name}"
             )));
         }
         return Ok(inner);
     }
     if value.contains(char::is_whitespace) {
-        return Err(AppError::validation(format!(
+        return Err(AppError::managed_document(format!(
             "managed host config has multiple values for {name}"
         )));
     }

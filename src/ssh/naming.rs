@@ -94,7 +94,7 @@ pub(crate) fn managed_key_type(path: &Path, host: &HostIdentifier) -> Result<Str
 }
 
 fn unmanaged_identity(path: &Path, host: &HostIdentifier) -> AppError {
-    AppError::unmanaged_identity(format!(
+    AppError::managed_identity(format!(
         "refusing to manage identity '{}' because it does not match host '{host}'",
         path.display()
     ))
@@ -111,7 +111,7 @@ fn reserved_identity(path: &Path, host: &HostIdentifier) -> AppError {
         }
         None => format!("rm {} {}.pub", path.display(), path.display()),
     };
-    AppError::unmanaged_identity(format!(
+    AppError::managed_identity(format!(
         "identity '{}' is a reserved OpenSSH key name; ssv does not manage it (it is \
          indistinguishable from a personal FIDO key). If an older ssv created host '{host}', \
          remove it manually: {removal}",

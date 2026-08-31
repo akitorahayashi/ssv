@@ -15,5 +15,5 @@ pub use app::audit::{AuditCode, AuditFinding, AuditReport, AuditSeverity};
 pub use app::remove::RemovalStatus;
 pub use cli::run as cli;
 pub use context::Context;
-pub use error::AppError;
+pub use error::{AppError, GitOperation};
 pub use ssh::bootstrap::BootstrapStatus;

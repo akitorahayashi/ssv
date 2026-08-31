@@ -80,9 +80,14 @@ fn link_fails_if_not_git_repo() {
     let non_repo_dir = context.home().join("not-a-repo");
     fs::create_dir(&non_repo_dir).unwrap();
 
-    context.cli().arg("link").arg(host).current_dir(&non_repo_dir).assert().failure().stderr(
-        predicate::str::contains("Error: current directory is not inside a Git repository"),
-    );
+    context
+        .cli()
+        .arg("link")
+        .arg(host)
+        .current_dir(&non_repo_dir)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("is not inside a Git repository"));
 }
 
 #[test]

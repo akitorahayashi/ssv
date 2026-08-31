@@ -1,16 +1,17 @@
-use crate::context::Context;
 use crate::error::{AppError, IoResultExt};
 use crate::ssh::atomic_file;
 use crate::ssh::bootstrap;
 use crate::ssh::host_config;
 use crate::ssh::keygen;
+use crate::ssh::layout::Layout;
 use crate::ssh::naming::{HostIdentifier, Hostname, ManagedKeyName, RemoteUser};
 use crate::ssh::permissions;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn execute(
-    ctx: &Context,
+    layout: &Layout,
+    keygen_path: &Path,
     host: &str,
     hostname: Option<&str>,
     key_type: &str,
@@ -21,7 +22,6 @@ pub(crate) fn execute(
     let hostname = Hostname::new(hostname.unwrap_or(host.as_str()))?;
     let user = user.map(RemoteUser::new).transpose()?;
     let key_name = ManagedKeyName::new(key_type, host.clone())?;
-    let layout = ctx.layout();
     bootstrap::ensure_bootstrap(layout)?;
 
     let (private, public) = layout.key_pair(&key_name);
@@ -37,11 +37,11 @@ pub(crate) fn execute(
 
     let staged_private = atomic_file::reserve_path(&layout.root(), ".ssv-key-")?;
     let staged_public = layout.public_key(&staged_private)?;
-    if let Err(error) = keygen::generate(ctx.keygen(), key_type, &staged_private) {
+    if let Err(error) = keygen::generate(keygen_path, key_type, &staged_private) {
         return Err(rollback(error, [staged_public.as_path(), staged_private.as_path()]));
     }
 
-    let prepared = prepare_key_pair(ctx, &staged_private, &staged_public);
+    let prepared = prepare_key_pair(layout, keygen_path, &staged_private, &staged_public);
     let public_key = match prepared {
         Ok(public_key) => public_key,
         Err(error) => {
@@ -73,21 +73,27 @@ pub(crate) fn execute(
 }
 
 fn prepare_key_pair(
-    ctx: &Context,
+    layout: &Layout,
+    keygen_path: &Path,
     staged_private: &Path,
     staged_public: &Path,
 ) -> Result<String, AppError> {
-    let layout = ctx.layout();
     layout.require_regular_file(staged_private)?;
     layout.require_regular_file(staged_public)?;
     permissions::set_mode(staged_private, permissions::PRIVATE_MODE)?;
     let public_key = fs::read_to_string(staged_public).path_ctx(staged_public)?;
-    let derived = keygen::derive_public(ctx.keygen(), staged_private)?;
+    let derived = keygen::derive_public(keygen_path, staged_private)?;
     let actual = key_fields(&public_key).ok_or_else(|| {
-        AppError::validation("generated public key does not contain algorithm and key fields")
+        AppError::invalid_external_output(
+            "reading the generated SSH public key",
+            "output does not contain algorithm and key fields",
+        )
     })?;
     let expected = key_fields(&derived).ok_or_else(|| {
-        AppError::validation("derived public key does not contain algorithm and key fields")
+        AppError::invalid_external_output(
+            "deriving an SSH public key",
+            "output does not contain algorithm and key fields",
+        )
     })?;
     if actual != expected {
         return Err(AppError::validation(
@@ -111,5 +117,5 @@ fn rollback<'a>(primary: AppError, paths: impl IntoIterator<Item = &'a Path>) ->
             Err(error) => cleanup.push(AppError::io(path, error)),
         }
     }
-    AppError::with_cleanup(AppError::rolled_back(primary), cleanup)
+    AppError::rollback("SSH asset generation", primary, cleanup)
 }

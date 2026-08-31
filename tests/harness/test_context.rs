@@ -43,6 +43,10 @@ impl TestContext {
         Context::new(self.home().to_path_buf(), keygen, self.copy_id_stub.clone())
     }
 
+    pub fn ctx_with_copy_id(&self, copy_id: PathBuf) -> Context {
+        Context::new(self.home().to_path_buf(), self.keygen_stub.clone(), copy_id)
+    }
+
     pub fn cli(&self) -> Command {
         let mut command = Command::cargo_bin("ssv").expect("ssv binary should exist");
         command

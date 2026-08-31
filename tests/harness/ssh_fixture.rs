@@ -165,6 +165,14 @@ printf 'external config\n' > "${{root}}/conf.d/{host}.conf"
         keygen
     }
 
+    pub fn install_failing_copy_id(&self) -> PathBuf {
+        let copy_id = self.home().join("failing-copy-id");
+        fs::write(&copy_id, "#!/usr/bin/env sh\necho 'injected copy-id failure' >&2\nexit 31\n")
+            .expect("failing copy-id should be written");
+        self.set_mode(&copy_id, 0o755);
+        copy_id
+    }
+
     pub fn set_mode(&self, path: &std::path::Path, mode: u32) {
         let mut permissions = fs::metadata(path).expect("metadata should exist").permissions();
         permissions.set_mode(mode);

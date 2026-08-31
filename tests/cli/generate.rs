@@ -93,9 +93,37 @@ fn generate_reports_rollback_when_public_key_read_fails() {
         .args(["generate", "rollback.test"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Rolled back partial SSH assets due to failure"));
+        .stderr(predicate::str::contains("operation-owned files were rolled back"));
 
     assert!(!context.host_config("rollback.test").exists());
     assert!(!context.private_key("ed25519", "rollback.test").exists());
     assert!(!context.public_key("ed25519", "rollback.test").exists());
+}
+
+#[test]
+fn generate_reports_captured_keygen_stderr() {
+    let context = TestContext::new();
+    let keygen = context.install_failing_keygen(true);
+    let mut command = context.cli();
+    command.env("SSV_SSH_KEYGEN_PATH", keygen);
+
+    command
+        .args(["generate", "failure.test"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("injected keygen failure"));
+}
+
+#[test]
+fn generate_rejects_option_like_connection_values_before_bootstrap() {
+    for (host, hostname, user) in [
+        ("-host", None, None),
+        ("safe.test", Some("-hostname"), None),
+        ("safe.test", None, Some("-user")),
+        ("safe.test", None, Some("user@host")),
+    ] {
+        let context = TestContext::new();
+        assert!(context.ctx().generate(host, hostname, "ed25519", user, None).is_err());
+        assert!(!context.ssh_root().exists());
+    }
 }

@@ -21,6 +21,9 @@ fn derive_failure_is_distinct_from_key_mismatch() {
     let ctx = context.ctx_with_keygen(context.install_failing_derive());
 
     let report = ctx.audit().expect("audit should succeed");
-    assert!(report.findings.iter().any(|finding| finding.code == AuditCode::KeyVerification));
+    assert!(report.findings.iter().any(|finding| {
+        finding.code == AuditCode::KeyVerification
+            && finding.message.contains("injected derive failure")
+    }));
     assert!(!report.findings.iter().any(|finding| finding.code == AuditCode::KeyMismatch));
 }

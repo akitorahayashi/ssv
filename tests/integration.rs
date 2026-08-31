@@ -16,6 +16,7 @@ mod cli {
 mod lifecycle {
     mod generate_list_remove;
     mod init_bootstrap;
+    mod link_api;
     mod read_only_operations;
     mod removal_safety;
     mod show_failures;

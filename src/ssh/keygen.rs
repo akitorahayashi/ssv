@@ -3,7 +3,7 @@ use std::path::Path;
 use std::process::Command;
 
 pub(crate) fn generate(keygen: &Path, key_type: &str, private: &Path) -> Result<(), AppError> {
-    let status = Command::new(keygen)
+    let output = Command::new(keygen)
         .arg("-t")
         .arg(key_type)
         .arg("-f")
@@ -11,12 +11,17 @@ pub(crate) fn generate(keygen: &Path, key_type: &str, private: &Path) -> Result<
         .arg("-q")
         .arg("-N")
         .arg("")
-        .status()
+        .output()
         .path_ctx(keygen)?;
-    if status.success() {
+    if output.status.success() {
         Ok(())
     } else {
-        Err(AppError::command_failed(&keygen.to_string_lossy(), status))
+        Err(AppError::external_command(
+            "generating an SSH key pair",
+            keygen,
+            output.status,
+            Some(&output.stderr),
+        ))
     }
 }
 
@@ -30,8 +35,17 @@ pub(crate) fn derive_public(keygen: &Path, private: &Path) -> Result<String, App
         .output()
         .path_ctx(keygen)?;
     if !output.status.success() {
-        return Err(AppError::command_failed(&keygen.to_string_lossy(), output.status));
+        return Err(AppError::external_command(
+            "deriving an SSH public key",
+            keygen,
+            output.status,
+            Some(&output.stderr),
+        ));
     }
-    String::from_utf8(output.stdout)
-        .map_err(|error| AppError::config(format!("derived public key was not UTF-8: {error}")))
+    String::from_utf8(output.stdout).map_err(|error| {
+        AppError::invalid_external_output(
+            "deriving an SSH public key",
+            format!("stdout was not UTF-8: {error}"),
+        )
+    })
 }

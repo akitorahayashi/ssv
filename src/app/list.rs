@@ -1,9 +1,9 @@
-use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::inventory::{self, HostCandidate};
+use crate::ssh::layout::Layout;
 
-pub(crate) fn execute(ctx: &Context) -> Result<Vec<String>, AppError> {
-    inventory::hosts(ctx.layout())?
+pub(crate) fn execute(layout: &Layout) -> Result<Vec<String>, AppError> {
+    inventory::hosts(layout)?
         .into_iter()
         .map(|candidate| match candidate {
             HostCandidate::Managed(host) => Ok(host.host.to_string()),

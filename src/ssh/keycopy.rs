@@ -19,7 +19,7 @@ pub(crate) fn install(
     if status.success() {
         Ok(())
     } else {
-        Err(AppError::command_failed(&copy_id.to_string_lossy(), status))
+        Err(AppError::external_command("installing an SSH public key", copy_id, status, None))
     }
 }
 

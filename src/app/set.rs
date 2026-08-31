@@ -1,10 +1,10 @@
-use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config;
+use crate::ssh::layout::Layout;
 use crate::ssh::naming::{HostIdentifier, Hostname, ManagedKeyName, RemoteUser};
 
 pub(crate) fn execute(
-    ctx: &Context,
+    layout: &Layout,
     host: &str,
     hostname: Option<&str>,
     user: Option<&str>,
@@ -18,7 +18,6 @@ pub(crate) fn execute(
     let host = HostIdentifier::new(host)?;
     let hostname = hostname.map(Hostname::new).transpose()?;
     let user = user.map(RemoteUser::new).transpose()?;
-    let layout = ctx.layout();
     let config = host_config::load(layout, &host)?;
     let key_type = crate::ssh::naming::managed_key_type(&config.private_key, &host)?;
     let key_name = ManagedKeyName::new(&key_type, host.clone())?;

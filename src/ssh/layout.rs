@@ -12,7 +12,7 @@ pub(crate) struct Layout {
 impl Layout {
     pub(crate) fn from_env() -> Result<Self, AppError> {
         let home = std::env::var_os("HOME")
-            .ok_or_else(|| AppError::config("HOME environment variable not set"))?;
+            .ok_or_else(|| AppError::environment("HOME environment variable not set"))?;
         Ok(Self { home: PathBuf::from(home) })
     }
 

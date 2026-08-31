@@ -1,4 +1,3 @@
-use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config::{ManagedHost, has_managed_include};
 use crate::ssh::inventory::{self, HostCandidate, IssueKind, KeyCandidate};
@@ -118,8 +117,8 @@ impl AuditReport {
     }
 }
 
-pub(crate) fn execute(ctx: &Context) -> Result<AuditReport, AppError> {
-    let layout = ctx.layout().clone();
+pub(crate) fn execute(layout: &Layout, keygen: &Path) -> Result<AuditReport, AppError> {
+    let layout = layout.clone();
     let mut report = AuditReport::default();
     let owner = match fs::metadata(layout.home()) {
         Ok(metadata) => Some(permissions::owner(&metadata)),
@@ -130,7 +129,7 @@ pub(crate) fn execute(ctx: &Context) -> Result<AuditReport, AppError> {
     };
     let mut audit = Audit {
         layout,
-        keygen: ctx.keygen().to_path_buf(),
+        keygen: keygen.to_path_buf(),
         report,
         referenced_keys: HashSet::new(),
         owner,
@@ -383,7 +382,7 @@ impl Audit {
     fn candidate_failure(&mut self, path: &Path, kind: IssueKind, error: AppError) {
         let code = match (&error, kind) {
             (AppError::OutsideManagedRoot(_), _) => AuditCode::OutsideManagedRoot,
-            (AppError::UnmanagedIdentity(_), _) => AuditCode::UnmanagedIdentity,
+            (AppError::ManagedIdentity(_), _) => AuditCode::UnmanagedIdentity,
             (_, IssueKind::Read) => AuditCode::ReadFailure,
             (_, IssueKind::FileType) => AuditCode::InvalidFileType,
             (_, IssueKind::Contract) => AuditCode::ConfigParse,
