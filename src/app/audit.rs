@@ -1,13 +1,15 @@
 use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config::{ManagedHost, has_managed_include};
+use crate::ssh::inventory::{self, HostCandidate, IssueKind, KeyCandidate};
 use crate::ssh::keygen;
 use crate::ssh::layout::Layout;
-use crate::ssh::naming;
+use crate::ssh::naming::KeyFileKind;
 use crate::ssh::permissions;
 use std::collections::HashSet;
 use std::fmt::{self, Display};
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +39,7 @@ pub enum AuditCode {
     OutsideManagedRoot,
     UnmanagedIdentity,
     KeyMismatch,
+    KeyVerification,
     OrphanedAsset,
     ReadFailure,
 }
@@ -54,6 +57,7 @@ impl Display for AuditCode {
             Self::OutsideManagedRoot => "outside-managed-root",
             Self::UnmanagedIdentity => "unmanaged-identity",
             Self::KeyMismatch => "key-mismatch",
+            Self::KeyVerification => "key-verification",
             Self::OrphanedAsset => "orphaned-asset",
             Self::ReadFailure => "read-failure",
         };
@@ -100,19 +104,39 @@ impl AuditReport {
             message: message.into(),
         });
     }
+
+    fn sort(&mut self) {
+        self.findings.sort_by(|left, right| {
+            left.path
+                .as_os_str()
+                .as_bytes()
+                .cmp(right.path.as_os_str().as_bytes())
+                .then_with(|| severity_rank(left.severity).cmp(&severity_rank(right.severity)))
+                .then_with(|| left.code.to_string().cmp(&right.code.to_string()))
+                .then_with(|| left.message.as_bytes().cmp(right.message.as_bytes()))
+        });
+    }
 }
 
 pub(crate) fn execute(ctx: &Context) -> Result<AuditReport, AppError> {
     let layout = ctx.layout().clone();
-    let owner = owner_of(layout.home());
+    let mut report = AuditReport::default();
+    let owner = match fs::metadata(layout.home()) {
+        Ok(metadata) => Some(permissions::owner(&metadata)),
+        Err(error) => {
+            report.error(AuditCode::ReadFailure, layout.home(), error.to_string());
+            None
+        }
+    };
     let mut audit = Audit {
         layout,
         keygen: ctx.keygen().to_path_buf(),
-        report: AuditReport::default(),
+        report,
         referenced_keys: HashSet::new(),
         owner,
     };
     audit.run();
+    audit.report.sort();
     Ok(audit.report)
 }
 
@@ -126,10 +150,13 @@ struct Audit {
 
 impl Audit {
     fn run(&mut self) {
-        self.inspect_directory(&self.layout.root(), permissions::DIRECTORY_MODE);
-        self.inspect_directory(&self.layout.hosts(), permissions::DIRECTORY_MODE);
+        if !self.inspect_directory(&self.layout.root(), permissions::DIRECTORY_MODE) {
+            return;
+        }
         self.inspect_main_config();
-        self.inspect_host_configs();
+        if self.inspect_directory(&self.layout.hosts(), permissions::DIRECTORY_MODE) {
+            self.inspect_host_configs();
+        }
         self.inspect_orphaned_keys();
     }
 
@@ -151,97 +178,48 @@ impl Audit {
 
     fn inspect_host_configs(&mut self) {
         let hosts = self.layout.hosts();
-        let entries = match fs::read_dir(&hosts) {
-            Ok(entries) => entries,
+        let candidates = match inventory::hosts(&self.layout) {
+            Ok(candidates) => candidates,
             Err(error) => {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    self.read_failure(&hosts, error);
-                }
+                self.candidate_failure(&hosts, IssueKind::Read, error);
                 return;
             }
         };
-
-        for entry in entries {
-            let path = match entry {
-                Ok(entry) => entry.path(),
-                Err(error) => {
-                    self.read_failure(&hosts, error);
-                    continue;
+        for candidate in candidates {
+            match candidate {
+                HostCandidate::Managed(config) => self.inspect_managed_host(config),
+                HostCandidate::Invalid { path, kind, error } => {
+                    self.candidate_failure(&path, kind, error);
                 }
-            };
-            if path.extension().and_then(|extension| extension.to_str()) != Some("conf") {
-                continue;
             }
-            self.inspect_host_config(&path);
         }
     }
 
-    fn inspect_host_config(&mut self, path: &Path) {
-        if !self.inspect_config_file(path) {
-            return;
-        }
-        let contents = match fs::read_to_string(path) {
-            Ok(contents) => contents,
-            Err(error) => {
-                self.read_failure(path, error);
-                return;
-            }
-        };
-        let Some(host) = path.file_stem().and_then(|stem| stem.to_str()) else {
-            self.report.error(AuditCode::ConfigParse, path, "host config has no UTF-8 filename");
-            return;
-        };
-        let host = match naming::HostIdentifier::new(host) {
-            Ok(host) => host,
-            Err(error) => {
-                self.report.error(AuditCode::ConfigParse, path, error.to_string());
-                return;
-            }
-        };
-        let config = match ManagedHost::parse(&contents, &self.layout, host, path.to_path_buf()) {
-            Ok(config) => config,
-            Err(error) => {
-                let code = match &error {
-                    AppError::OutsideManagedRoot(_) => AuditCode::OutsideManagedRoot,
-                    AppError::UnmanagedIdentity(_) => AuditCode::UnmanagedIdentity,
-                    _ => AuditCode::ConfigParse,
-                };
-                self.report.error(code, path, error.to_string());
-                return;
-            }
-        };
+    fn inspect_managed_host(&mut self, config: ManagedHost) {
+        self.inspect_config_file(&config.path);
         self.referenced_keys.insert(config.private_key.clone());
-        self.inspect_private_key(&config.private_key);
+        self.referenced_keys.insert(config.public_key.clone());
+        self.inspect_key_pair(&config.private_key, &config.public_key);
     }
 
-    fn inspect_private_key(&mut self, private: &Path) {
-        if !self.inspect_path(
+    fn inspect_key_pair(&mut self, private: &Path, public: &Path) {
+        let private_valid = self.inspect_path(
             private,
             ExpectedType::File,
             Some(permissions::PRIVATE_MODE),
             SECRET_UNSAFE_MASK,
-        ) {
-            return;
+        );
+        let public_valid = self.inspect_path(public, ExpectedType::File, None, PUBLIC_UNSAFE_MASK);
+        if private_valid && public_valid {
+            self.compare_key_pair(private, public);
         }
-        let public = match self.layout.public_key(private) {
-            Ok(public) => public,
-            Err(error) => {
-                self.report.error(AuditCode::ConfigParse, private, error.to_string());
-                return;
-            }
-        };
-        // Public keys carry no confidentiality requirement, so no permission bits are unsafe.
-        if !self.inspect_path(&public, ExpectedType::File, None, PUBLIC_UNSAFE_MASK) {
-            return;
-        }
-        self.compare_key_pair(private, &public);
     }
 
     fn compare_key_pair(&mut self, private: &Path, public: &Path) {
         let expected = match derived_public_key(&self.keygen, private) {
             Ok(key) => key,
             Err(message) => {
-                self.report.error(AuditCode::KeyMismatch, private, message);
+                self.report.error(AuditCode::KeyVerification, private, message);
                 return;
             }
         };
@@ -263,29 +241,37 @@ impl Audit {
 
     fn inspect_orphaned_keys(&mut self) {
         let root = self.layout.root();
-        let entries = match fs::read_dir(&root) {
-            Ok(entries) => entries,
+        let candidates = match inventory::keys(&self.layout) {
+            Ok(candidates) => candidates,
             Err(error) => {
-                if error.kind() != std::io::ErrorKind::NotFound {
-                    self.read_failure(&root, error);
-                }
+                self.candidate_failure(&root, IssueKind::Read, error);
                 return;
             }
         };
-        for entry in entries {
-            let path = match entry {
-                Ok(entry) => entry.path(),
-                Err(error) => {
-                    self.read_failure(&root, error);
-                    continue;
+        for candidate in candidates {
+            match candidate {
+                KeyCandidate::Managed { path, name, kind } => {
+                    if self.referenced_keys.contains(&path) {
+                        continue;
+                    }
+                    let file_kind = match kind {
+                        KeyFileKind::Private => "private key",
+                        KeyFileKind::Public => "public key",
+                    };
+                    self.report.warning(
+                        AuditCode::OrphanedAsset,
+                        &path,
+                        format!(
+                            "managed {file_kind} for host '{}' is not referenced by a managed host config",
+                            name.host()
+                        ),
+                    );
                 }
-            };
-            if naming::is_managed_key_candidate(&path) && !self.referenced_keys.contains(&path) {
-                self.report.warning(
-                    AuditCode::OrphanedAsset,
-                    &path,
-                    "key is not referenced by a managed host config",
-                );
+                KeyCandidate::Invalid { path, kind, error } => {
+                    if !self.referenced_keys.contains(&path) {
+                        self.candidate_failure(&path, kind, error);
+                    }
+                }
             }
         }
     }
@@ -393,6 +379,17 @@ impl Audit {
     fn read_failure(&mut self, path: &Path, error: std::io::Error) {
         self.report.error(AuditCode::ReadFailure, path, error.to_string());
     }
+
+    fn candidate_failure(&mut self, path: &Path, kind: IssueKind, error: AppError) {
+        let code = match (&error, kind) {
+            (AppError::OutsideManagedRoot(_), _) => AuditCode::OutsideManagedRoot,
+            (AppError::UnmanagedIdentity(_), _) => AuditCode::UnmanagedIdentity,
+            (_, IssueKind::Read) => AuditCode::ReadFailure,
+            (_, IssueKind::FileType) => AuditCode::InvalidFileType,
+            (_, IssueKind::Contract) => AuditCode::ConfigParse,
+        };
+        self.report.error(code, path, error.to_string());
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -401,12 +398,8 @@ enum ExpectedType {
     File,
 }
 
-/// Permission bits that expose a confidential asset (directories, private keys): any access by
-/// group or other.
 const SECRET_UNSAFE_MASK: u32 = 0o077;
-/// Permission bits that expose a config file: write access by group or other.
 const CONFIG_UNSAFE_MASK: u32 = 0o022;
-/// Public keys carry no confidentiality requirement; no permission bits are unsafe.
 const PUBLIC_UNSAFE_MASK: u32 = 0o000;
 
 fn derived_public_key(keygen: &Path, private: &Path) -> Result<String, String> {
@@ -419,6 +412,9 @@ fn comparable_key(contents: &str) -> String {
     contents.split_whitespace().take(2).collect::<Vec<_>>().join(" ")
 }
 
-fn owner_of(path: &Path) -> Option<u32> {
-    fs::metadata(path).ok().map(|metadata| permissions::owner(&metadata))
+fn severity_rank(severity: AuditSeverity) -> u8 {
+    match severity {
+        AuditSeverity::Error => 0,
+        AuditSeverity::Warning => 1,
+    }
 }

@@ -13,3 +13,14 @@ fn mismatched_public_key_is_reported() {
     let report = ctx.audit().expect("audit should succeed");
     assert!(report.findings.iter().any(|finding| finding.code == AuditCode::KeyMismatch));
 }
+
+#[test]
+fn derive_failure_is_distinct_from_key_mismatch() {
+    let context = TestContext::new();
+    context.write_managed_host("derive.test");
+    let ctx = context.ctx_with_keygen(context.install_failing_derive());
+
+    let report = ctx.audit().expect("audit should succeed");
+    assert!(report.findings.iter().any(|finding| finding.code == AuditCode::KeyVerification));
+    assert!(!report.findings.iter().any(|finding| finding.code == AuditCode::KeyMismatch));
+}

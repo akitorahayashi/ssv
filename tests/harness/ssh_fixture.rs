@@ -157,6 +157,14 @@ printf 'external config\n' > "${{root}}/conf.d/{host}.conf"
         keygen
     }
 
+    pub fn install_failing_derive(&self) -> PathBuf {
+        let keygen = self.home().join("failing-derive-keygen");
+        fs::write(&keygen, "#!/usr/bin/env sh\necho 'injected derive failure' >&2\nexit 29\n")
+            .expect("failing derive should be written");
+        self.set_mode(&keygen, 0o755);
+        keygen
+    }
+
     pub fn set_mode(&self, path: &std::path::Path, mode: u32) {
         let mut permissions = fs::metadata(path).expect("metadata should exist").permissions();
         permissions.set_mode(mode);

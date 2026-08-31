@@ -18,6 +18,12 @@ pub(crate) struct ManagedKeyName {
     host: HostIdentifier,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum KeyFileKind {
+    Private,
+    Public,
+}
+
 impl ManagedKeyName {
     pub(crate) fn new(key_type: &str, host: HostIdentifier) -> Result<Self, AppError> {
         validate_key_type(key_type)?;
@@ -42,6 +48,14 @@ impl ManagedKeyName {
             return None;
         }
         Some(Self { key_type: key_type.to_string(), host: HostIdentifier(host.to_string()) })
+    }
+
+    pub(crate) fn parse_file(filename: &str) -> Option<(Self, KeyFileKind)> {
+        if let Some(private) = filename.strip_suffix(".pub") {
+            Self::parse(private).map(|name| (name, KeyFileKind::Public))
+        } else {
+            Self::parse(filename).map(|name| (name, KeyFileKind::Private))
+        }
     }
 
     pub(crate) fn key_type(&self) -> &str {
@@ -77,17 +91,6 @@ pub(crate) fn managed_key_type(path: &Path, host: &HostIdentifier) -> Result<Str
         Some(name) if name.host() == host => Ok(name.key_type().to_string()),
         _ => Err(unmanaged_identity(path, host)),
     }
-}
-
-/// Whether a filesystem entry is a candidate ssv-managed private key (used by orphan detection).
-pub(crate) fn is_managed_key_candidate(path: &Path) -> bool {
-    let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
-        return false;
-    };
-    if filename.ends_with(".pub") {
-        return false;
-    }
-    ManagedKeyName::parse(filename).is_some()
 }
 
 fn unmanaged_identity(path: &Path, host: &HostIdentifier) -> AppError {
@@ -302,9 +305,16 @@ mod tests {
     }
 
     #[test]
-    fn managed_key_candidates_exclude_standard_keys() {
-        assert!(!is_managed_key_candidate(Path::new("id_ed25519")));
-        assert!(!is_managed_key_candidate(Path::new("id_ed25519_sk")));
-        assert!(is_managed_key_candidate(Path::new("id_ed25519_github.com")));
+    fn managed_key_files_include_public_keys_and_exclude_standard_keys() {
+        assert!(ManagedKeyName::parse_file("id_ed25519").is_none());
+        assert!(ManagedKeyName::parse_file("id_ed25519_sk").is_none());
+        assert_eq!(
+            ManagedKeyName::parse_file("id_ed25519_github.com").map(|(_, kind)| kind),
+            Some(KeyFileKind::Private)
+        );
+        assert_eq!(
+            ManagedKeyName::parse_file("id_ed25519_github.com.pub").map(|(_, kind)| kind),
+            Some(KeyFileKind::Public)
+        );
     }
 }

@@ -117,6 +117,25 @@ impl Layout {
         }
     }
 
+    pub(crate) fn require_directory(&self, path: &Path) -> Result<(), AppError> {
+        self.require_managed(path)?;
+        if self.has_symlink_component(path)? {
+            return Err(AppError::validation(format!(
+                "managed path '{}' contains a symbolic link",
+                path.display()
+            )));
+        }
+        let metadata = fs::symlink_metadata(path).path_ctx(path)?;
+        if metadata.file_type().is_dir() {
+            Ok(())
+        } else {
+            Err(AppError::validation(format!(
+                "managed path '{}' is not a directory",
+                path.display()
+            )))
+        }
+    }
+
     pub(crate) fn has_symlink_component(&self, path: &Path) -> Result<bool, AppError> {
         self.require_managed(path)?;
         let relative = path

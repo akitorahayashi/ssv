@@ -31,6 +31,7 @@ mod audit {
 }
 
 mod security {
+    mod inventory;
     mod managed_host_contract;
     mod managed_path_boundary;
     mod symlinks;
