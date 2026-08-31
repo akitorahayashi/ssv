@@ -167,7 +167,7 @@ printf 'external config\n' > "${{root}}/conf.d/{host}.conf"
 
     pub fn install_failing_copy_id(&self) -> PathBuf {
         let copy_id = self.home().join("failing-copy-id");
-        fs::write(&copy_id, "#!/usr/bin/env sh\necho 'injected copy-id failure' >&2\nexit 31\n")
+        fs::write(&copy_id, "#!/usr/bin/env sh\nexit 31\n")
             .expect("failing copy-id should be written");
         self.set_mode(&copy_id, 0o755);
         copy_id
