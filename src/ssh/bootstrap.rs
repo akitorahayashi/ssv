@@ -1,9 +1,11 @@
 use crate::error::{AppError, IoResultExt};
-use crate::ssh::host_config::has_managed_include;
+use crate::ssh::atomic_file;
+use crate::ssh::host_config::{directive_name, has_managed_include};
 use crate::ssh::layout::Layout;
 use crate::ssh::permissions;
 use std::fmt::{self, Display};
 use std::fs;
+use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
 
 const MANAGED_INCLUDE_LINE: &str = "Include ~/.ssh/conf.d/*.conf";
@@ -63,8 +65,19 @@ fn prepare_dir(path: &Path) -> Result<BootstrapStatus, AppError> {
             path.display()
         ))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            fs::create_dir_all(path).path_ctx(path)?;
+            let mut builder = fs::DirBuilder::new();
+            builder.mode(permissions::DIRECTORY_MODE);
+            builder.create(path).path_ctx(path)?;
             permissions::set_mode(path, permissions::DIRECTORY_MODE)?;
+            let metadata = fs::symlink_metadata(path).path_ctx(path)?;
+            if !metadata.file_type().is_dir()
+                || requires_mode_update(&metadata, permissions::DIRECTORY_MODE)
+            {
+                return Err(AppError::validation(format!(
+                    "created SSH directory '{}' does not have mode 0700",
+                    path.display()
+                )));
+            }
             Ok(BootstrapStatus::Created)
         }
         Err(error) => Err(AppError::io(path, error)),
@@ -97,7 +110,7 @@ fn ensure_main_config_include(layout: &Layout) -> Result<BootstrapStatus, AppErr
                 }
                 None => format!("{insertion}{contents}"),
             };
-            fs::write(&path, updated).path_ctx(&path)?;
+            atomic_file::replace(&path, &updated)?;
             if status == BootstrapStatus::UpToDate {
                 Ok(BootstrapStatus::Repaired)
             } else {
@@ -109,8 +122,7 @@ fn ensure_main_config_include(layout: &Layout) -> Result<BootstrapStatus, AppErr
             path.display()
         ))),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            fs::write(&path, format!("{MANAGED_INCLUDE_LINE}\n")).path_ctx(&path)?;
-            permissions::set_mode(&path, permissions::PRIVATE_MODE)?;
+            atomic_file::create(&path, &format!("{MANAGED_INCLUDE_LINE}\n"))?;
             Ok(BootstrapStatus::Created)
         }
         Err(error) => Err(AppError::io(&path, error)),
@@ -124,7 +136,7 @@ fn requires_mode_update(metadata: &fs::Metadata, expected: u32) -> bool {
 fn first_block_offset(contents: &str) -> Option<usize> {
     let mut offset = 0;
     for line in contents.split_inclusive('\n') {
-        let name = line.split_whitespace().next();
+        let name = directive_name(line);
         if name.is_some_and(|name| {
             name.eq_ignore_ascii_case("Host") || name.eq_ignore_ascii_case("Match")
         }) {
@@ -178,5 +190,20 @@ mod tests {
         let config = fs::read_to_string(layout.config()).expect("config should exist");
         assert_eq!(config, "# settings\nInclude ~/.ssh/conf.d/*.conf\nHost example\n  User test\n");
         assert!(has_managed_include(&config));
+    }
+
+    #[test]
+    fn managed_include_precedes_equals_block_syntax() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let layout = Layout::from_home(temp.path().to_path_buf());
+        prepare_dir(&layout.root()).expect("root should exist");
+        prepare_dir(&layout.hosts()).expect("hosts should exist");
+        fs::write(layout.config(), "Host=example\n  User test\n")
+            .expect("config should be written");
+
+        ensure_bootstrap(&layout).expect("bootstrap should succeed");
+
+        let config = fs::read_to_string(layout.config()).expect("config should exist");
+        assert_eq!(config, "Include ~/.ssh/conf.d/*.conf\nHost=example\n  User test\n");
     }
 }

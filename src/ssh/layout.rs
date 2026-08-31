@@ -1,5 +1,5 @@
 use crate::error::{AppError, IoResultExt};
-use crate::ssh::naming::{self, ManagedKeyName};
+use crate::ssh::naming::{self, HostIdentifier, ManagedKeyName};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
@@ -12,7 +12,7 @@ pub(crate) struct Layout {
 impl Layout {
     pub(crate) fn from_env() -> Result<Self, AppError> {
         let home = std::env::var_os("HOME")
-            .ok_or_else(|| AppError::config("HOME environment variable not set"))?;
+            .ok_or_else(|| AppError::environment("HOME environment variable not set"))?;
         Ok(Self { home: PathBuf::from(home) })
     }
 
@@ -36,7 +36,7 @@ impl Layout {
         self.root().join("conf.d")
     }
 
-    pub(crate) fn host_config(&self, host: &str) -> PathBuf {
+    pub(crate) fn host_config(&self, host: &HostIdentifier) -> PathBuf {
         self.hosts().join(format!("{host}.conf"))
     }
 
@@ -64,7 +64,11 @@ impl Layout {
         }
     }
 
-    pub(crate) fn require_host_identity(&self, path: &Path, host: &str) -> Result<(), AppError> {
+    pub(crate) fn require_host_identity(
+        &self,
+        path: &Path,
+        host: &HostIdentifier,
+    ) -> Result<(), AppError> {
         self.require_managed(path)?;
         naming::managed_key_type(path, host).map(|_| ())
     }
@@ -72,6 +76,12 @@ impl Layout {
     pub(crate) fn resolve_identity(&self, value: &str) -> Result<PathBuf, AppError> {
         if value == "none" || value.contains('%') || value.contains('$') {
             return Err(AppError::validation(format!("unsupported IdentityFile value '{value}'")));
+        }
+        if Path::new(value).components().any(|component| matches!(component, Component::ParentDir))
+        {
+            return Err(AppError::validation(format!(
+                "IdentityFile value '{value}' contains a parent-directory component"
+            )));
         }
 
         let candidate = if let Some(relative) = value.strip_prefix("~/") {
@@ -108,6 +118,25 @@ impl Layout {
         } else {
             Err(AppError::validation(format!(
                 "managed path '{}' is not a regular file",
+                path.display()
+            )))
+        }
+    }
+
+    pub(crate) fn require_directory(&self, path: &Path) -> Result<(), AppError> {
+        self.require_managed(path)?;
+        if self.has_symlink_component(path)? {
+            return Err(AppError::validation(format!(
+                "managed path '{}' contains a symbolic link",
+                path.display()
+            )));
+        }
+        let metadata = fs::symlink_metadata(path).path_ctx(path)?;
+        if metadata.file_type().is_dir() {
+            Ok(())
+        } else {
+            Err(AppError::validation(format!(
+                "managed path '{}' is not a directory",
                 path.display()
             )))
         }
@@ -164,5 +193,11 @@ mod tests {
     fn identity_resolution_rejects_paths_outside_root() {
         let layout = Layout::from_home(PathBuf::from("/home/test"));
         assert!(layout.resolve_identity("/outside/key").is_err());
+    }
+
+    #[test]
+    fn identity_resolution_rejects_parent_directory_components() {
+        let layout = Layout::from_home(PathBuf::from("/home/test"));
+        assert!(layout.resolve_identity("~/.ssh/link/../id_ed25519_example.test").is_err());
     }
 }

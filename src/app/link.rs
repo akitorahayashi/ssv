@@ -1,61 +1,76 @@
-use crate::context::Context;
-use crate::error::AppError;
+use crate::error::{AppError, GitOperation};
 use crate::ssh::host_config;
-use crate::ssh::naming;
+use crate::ssh::layout::Layout;
+use crate::ssh::naming::HostIdentifier;
 use git2::{ErrorCode, Repository};
+use std::path::Path;
 
-pub(crate) fn execute(ctx: &Context, host: &str) -> Result<String, AppError> {
-    naming::validate_host(host)?;
-    // `link` never dereferences the identity; it only confirms the host is a managed,
-    // well-formed config (regular file, no symlink) before rewriting the git remote.
-    host_config::load(ctx.layout(), host)?;
+pub(crate) fn execute(
+    layout: &Layout,
+    repository_start: &Path,
+    host: &str,
+) -> Result<String, AppError> {
+    let host = HostIdentifier::new(host)?;
+    host_config::load(layout, &host)?;
 
-    let repository = open_repository()?;
+    let repository = open_repository(repository_start)?;
     let current_url = origin_url(&repository)?;
     let repo_path = extract_repo_path(&current_url)?;
     let new_url = format!("git@{host}:{repo_path}");
 
     repository.remote_set_url("origin", &new_url).map_err(|error| {
-        AppError::config(format!("failed to update origin remote URL: {error}"))
+        AppError::git(
+            GitOperation::UpdateOrigin,
+            format!("failed to update origin remote URL: {error}"),
+        )
     })?;
 
     Ok(new_url)
 }
 
-fn open_repository() -> Result<Repository, AppError> {
-    Repository::discover(".").map_err(|error| match error.code() {
-        ErrorCode::NotFound => {
-            AppError::validation("current directory is not inside a Git repository")
-        }
-        _ => AppError::config(format!("failed to open Git repository: {error}")),
+fn open_repository(start: &Path) -> Result<Repository, AppError> {
+    Repository::discover(start).map_err(|error| match error.code() {
+        ErrorCode::NotFound => AppError::git(
+            GitOperation::DiscoverRepository,
+            format!("'{}' is not inside a Git repository", start.display()),
+        ),
+        _ => AppError::git(
+            GitOperation::DiscoverRepository,
+            format!("failed to open Git repository from '{}': {error}", start.display()),
+        ),
     })
 }
 
 fn origin_url(repository: &Repository) -> Result<String, AppError> {
     let remote = repository.find_remote("origin").map_err(|error| match error.code() {
-        ErrorCode::NotFound => AppError::validation("origin remote was not found"),
-        _ => AppError::config(format!("failed to read origin remote: {error}")),
+        ErrorCode::NotFound => {
+            AppError::git(GitOperation::ReadOrigin, "origin remote was not found")
+        }
+        _ => AppError::git(
+            GitOperation::ReadOrigin,
+            format!("failed to read origin remote: {error}"),
+        ),
     })?;
-    remote
-        .url()
-        .map(str::to_owned)
-        .ok_or_else(|| AppError::validation("origin remote URL is missing or not valid UTF-8"))
+    remote.url().map(str::to_owned).ok_or_else(|| {
+        AppError::git(GitOperation::ParseOrigin, "origin remote URL is missing or not valid UTF-8")
+    })
 }
 
 fn extract_repo_path(url: &str) -> Result<String, AppError> {
-    // SSH: git@github.com:org/repo.git
     if url.starts_with("git@") {
-        return url.find(':').map(|colon_pos| url[colon_pos + 1..].to_string()).ok_or_else(|| {
-            AppError::validation(format!("unsupported git remote URL format: {url}"))
-        });
+        return url
+            .find(':')
+            .map(|colon| url[colon + 1..].to_string())
+            .ok_or_else(|| unsupported_remote(url));
     }
-
-    // HTTPS: https://github.com/org/repo.git
-    if let Some(path_part) = url.strip_prefix("https://")
-        && let Some(slash_pos) = path_part.find('/')
+    if let Some(path) = url.strip_prefix("https://")
+        && let Some(slash) = path.find('/')
     {
-        return Ok(path_part[slash_pos + 1..].to_string());
+        return Ok(path[slash + 1..].to_string());
     }
+    Err(unsupported_remote(url))
+}
 
-    Err(AppError::validation(format!("unsupported git remote URL format: {url}")))
+fn unsupported_remote(url: &str) -> AppError {
+    AppError::git(GitOperation::ParseOrigin, format!("unsupported git remote URL format: {url}"))
 }

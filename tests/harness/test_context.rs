@@ -43,9 +43,26 @@ impl TestContext {
         Context::new(self.home().to_path_buf(), keygen, self.copy_id_stub.clone())
     }
 
+    pub fn ctx_with_copy_id(&self, copy_id: PathBuf) -> Context {
+        Context::new(self.home().to_path_buf(), self.keygen_stub.clone(), copy_id)
+    }
+
     pub fn cli(&self) -> Command {
         let mut command = Command::cargo_bin("ssv").expect("ssv binary should exist");
         command
+            .current_dir(&self.work_dir)
+            .env("HOME", self.home())
+            .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub)
+            .env("SSV_SSH_COPY_ID_PATH", &self.copy_id_stub);
+        command
+    }
+
+    pub fn cli_with_permissive_umask(&self) -> Command {
+        let binary = assert_cmd::cargo::cargo_bin("ssv");
+        let mut command = Command::new("sh");
+        command
+            .args(["-c", "umask 000; exec \"$@\"", "sh"])
+            .arg(binary)
             .current_dir(&self.work_dir)
             .env("HOME", self.home())
             .env("SSV_SSH_KEYGEN_PATH", &self.keygen_stub)

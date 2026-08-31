@@ -42,3 +42,19 @@ fn show_rejects_unmanaged_identity_inside_ssh_root() {
 
     assert!(ctx.show("default.test").is_err());
 }
+
+#[test]
+fn current_standard_identity_is_not_reported_as_managed() {
+    let context = TestContext::new();
+    context.prepare_include();
+    let private = context.ssh_root().join("id_mldsa44_ed25519");
+    let public = context.ssh_root().join("id_mldsa44_ed25519.pub");
+    fs::write(&private, "personal key").expect("personal private key should be written");
+    fs::write(&public, "personal public key").expect("personal public key should be written");
+
+    let report = context.ctx().audit().expect("audit should succeed");
+    assert!(!report.findings.iter().any(|finding| {
+        finding.code == AuditCode::OrphanedAsset
+            && (finding.path == private || finding.path == public)
+    }));
+}

@@ -2,7 +2,7 @@ use crate::app;
 use crate::app::audit::AuditReport;
 use crate::app::remove::RemovalStatus;
 use crate::error::AppError;
-use crate::ssh::bootstrap::BootstrapStatus;
+use crate::ssh::bootstrap::{self, BootstrapStatus};
 use crate::ssh::layout::Layout;
 use std::path::{Path, PathBuf};
 
@@ -34,21 +34,9 @@ impl Context {
         Self { layout: Layout::from_home(home), keygen, copy_id }
     }
 
-    pub(crate) fn layout(&self) -> &Layout {
-        &self.layout
-    }
-
-    pub(crate) fn keygen(&self) -> &Path {
-        &self.keygen
-    }
-
-    pub(crate) fn copy_id(&self) -> &Path {
-        &self.copy_id
-    }
-
     /// Ensure the SSH bootstrap required for managed host configs exists.
     pub fn init(&self) -> Result<BootstrapStatus, AppError> {
-        app::init::execute(self)
+        bootstrap::ensure_bootstrap(&self.layout)
     }
 
     /// Generate a new SSH key pair and configuration for `host`.
@@ -63,32 +51,32 @@ impl Context {
         user: Option<&str>,
         port: Option<u16>,
     ) -> Result<String, AppError> {
-        app::generate::execute(self, host, hostname, key_type, user, port)
+        app::generate::execute(&self.layout, &self.keygen, host, hostname, key_type, user, port)
     }
 
     /// List all managed hosts underneath `~/.ssh/conf.d`.
     pub fn list(&self) -> Result<Vec<String>, AppError> {
-        app::list::execute(self)
+        app::list::execute(&self.layout)
     }
 
     /// Remove the key pair and configuration associated with `host`.
     pub fn remove(&self, host: &str) -> Result<RemovalStatus, AppError> {
-        app::remove::execute(self, host)
+        app::remove::execute(&self.layout, host)
     }
 
     /// Return the public key associated with a managed host.
     pub fn show(&self, host: &str) -> Result<String, AppError> {
-        app::show::execute(self, host)
+        app::show::execute(&self.layout, host)
     }
 
-    /// Rewrite the current repository's `origin` remote to the managed host.
-    pub fn link(&self, host: &str) -> Result<String, AppError> {
-        app::link::execute(self, host)
+    /// Rewrite a discovered repository's `origin` remote to the managed host.
+    pub fn link(&self, repository_start: &Path, host: &str) -> Result<String, AppError> {
+        app::link::execute(&self.layout, repository_start, host)
     }
 
     /// Install a managed host's public key on the remote server via `ssh-copy-id`.
     pub fn authorize(&self, host: &str) -> Result<String, AppError> {
-        app::authorize::execute(self, host)
+        app::authorize::execute(&self.layout, &self.copy_id, host)
     }
 
     /// Update the `HostName`, user, or port of an existing managed host without regenerating keys.
@@ -99,12 +87,12 @@ impl Context {
         user: Option<&str>,
         port: Option<u16>,
     ) -> Result<String, AppError> {
-        app::set::execute(self, host, hostname, user, port)
+        app::set::execute(&self.layout, host, hostname, user, port)
     }
 
     /// Inspect managed SSH assets without modifying them.
     pub fn audit(&self) -> Result<AuditReport, AppError> {
-        app::audit::execute(self)
+        app::audit::execute(&self.layout, &self.keygen)
     }
 }
 

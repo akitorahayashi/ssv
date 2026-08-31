@@ -16,6 +16,7 @@ mod cli {
 mod lifecycle {
     mod generate_list_remove;
     mod init_bootstrap;
+    mod link_api;
     mod read_only_operations;
     mod removal_safety;
     mod show_failures;
@@ -31,6 +32,8 @@ mod audit {
 }
 
 mod security {
+    mod inventory;
+    mod managed_host_contract;
     mod managed_path_boundary;
     mod symlinks;
 }

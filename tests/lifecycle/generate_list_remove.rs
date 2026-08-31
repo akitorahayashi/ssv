@@ -26,3 +26,37 @@ fn generate_removes_artifacts_when_public_key_read_fails() {
     assert!(!context.private_key("ed25519", "rollback.test").exists());
     assert!(!context.public_key("ed25519", "rollback.test").exists());
 }
+
+#[test]
+fn nonzero_keygen_cleanup_permits_retry() {
+    for writes_public in [false, true] {
+        let context = TestContext::new();
+        let failing = context.ctx_with_keygen(context.install_failing_keygen(writes_public));
+
+        assert!(failing.generate("retry.test", None, "ed25519", None, None).is_err());
+        assert!(!context.host_config("retry.test").exists());
+        assert!(!context.private_key("ed25519", "retry.test").exists());
+        assert!(!context.public_key("ed25519", "retry.test").exists());
+
+        context
+            .ctx()
+            .generate("retry.test", None, "ed25519", None, None)
+            .expect("retry should succeed");
+    }
+}
+
+#[test]
+fn config_conflict_does_not_clobber_external_file_and_rolls_back_keys() {
+    let context = TestContext::new();
+    let host = "conflict.test";
+    let ctx = context.ctx_with_keygen(context.install_config_conflict_keygen(host));
+
+    assert!(ctx.generate(host, None, "ed25519", None, None).is_err());
+
+    assert_eq!(
+        std::fs::read_to_string(context.host_config(host)).expect("external config"),
+        "external config\n"
+    );
+    assert!(!context.private_key("ed25519", host).exists());
+    assert!(!context.public_key("ed25519", host).exists());
+}

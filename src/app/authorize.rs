@@ -1,19 +1,15 @@
-use crate::context::Context;
 use crate::error::AppError;
 use crate::ssh::host_config;
 use crate::ssh::keycopy;
-use crate::ssh::naming;
+use crate::ssh::layout::Layout;
+use crate::ssh::naming::HostIdentifier;
+use std::path::Path;
 
-pub(crate) fn execute(ctx: &Context, host: &str) -> Result<String, AppError> {
-    naming::validate_host(host)?;
-    let layout = ctx.layout();
-    let config = host_config::load(layout, host)?;
-    layout.require_host_identity(&config.identity, host)?;
-    let public = layout.public_key(&config.identity)?;
-    layout.require_regular_file(&public)?;
-    let hostname = config
-        .hostname
-        .ok_or_else(|| AppError::validation("managed host config has no HostName"))?;
-    keycopy::install(ctx.copy_id(), &public, config.user.as_deref(), &hostname, config.port)?;
-    Ok(keycopy::target(config.user.as_deref(), &hostname))
+pub(crate) fn execute(layout: &Layout, copy_id: &Path, host: &str) -> Result<String, AppError> {
+    let host = HostIdentifier::new(host)?;
+    let config = host_config::load(layout, &host)?;
+    layout.require_regular_file(&config.public_key)?;
+    let user = config.user.as_ref().map(|user| user.as_str());
+    keycopy::install(copy_id, &config.public_key, user, config.hostname.as_str(), config.port)?;
+    Ok(keycopy::target(user, config.hostname.as_str()))
 }

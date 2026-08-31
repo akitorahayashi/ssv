@@ -51,7 +51,19 @@ ssv set <HOST> -n <NEW_ADDRESS>        # also accepts -u and -p
 `IdentityFile`, `IdentitiesOnly`), carrying over the current `HostName`, user, and port for the
 flags not supplied and leaving the key pair untouched. Directives added to the file by hand
 (such as `ProxyJump`) are not part of the managed layout and do not survive the rewrite. `ssv
-audit` verifies the managed assets afterward.
+audit` verifies the managed assets afterward. `set` accepts only a structurally valid managed host
+file; it does not infer missing required fields.
+
+## Failure recovery (on the client)
+
+`ssv generate` does not replace existing final files. A returned generation failure removes files
+owned by that attempt and can be retried after resolving any reported external-file conflict.
+
+`ssv remove` validates the config and both key paths before deleting anything. It removes the config
+last, so a key-deletion failure retains the host-to-key relationship for a later retry. A malformed
+managed config is rejected by mutation commands and reported by `ssv audit`; restore its canonical
+`Host`, `HostName`, `IdentityFile`, and `IdentitiesOnly yes` fields from a trusted backup before
+retrying `set` or `remove`.
 
 ## Tailscale
 

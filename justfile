@@ -25,6 +25,7 @@ check:
     cargo fmt --check
     cargo clippy --all-targets --all-features -- -D warnings
     mise exec -- just --fmt --check --unstable
+    mise exec -- actionlint
 
 # Run all tests
 test:
