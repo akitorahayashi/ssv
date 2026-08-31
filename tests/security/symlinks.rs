@@ -52,3 +52,28 @@ fn init_rejects_symlinked_ssh_root() {
     assert!(ctx.init().is_err());
     assert!(!outside.join("conf.d").exists());
 }
+
+#[test]
+#[cfg(unix)]
+fn identity_parent_component_is_rejected_before_symlink_traversal() {
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    let context = TestContext::new();
+    context.prepare_include();
+    let outside = context.home().join("outside");
+    fs::create_dir(&outside).expect("outside directory should be created");
+    symlink(&outside, context.ssh_root().join("link")).expect("symlink should be created");
+    fs::write(context.private_key("ed25519", "parent.test"), "private")
+        .expect("normalized private key should be written");
+    fs::write(context.public_key("ed25519", "parent.test"), "public")
+        .expect("normalized public key should be written");
+    context.write_host_config("parent.test", "~/.ssh/link/../id_ed25519_parent.test");
+    let ctx = context.ctx();
+
+    assert!(ctx.show("parent.test").is_err());
+    let report = ctx.audit().expect("audit should succeed");
+    assert!(report.findings.iter().any(|finding| {
+        finding.code == AuditCode::ConfigParse && finding.path == context.host_config("parent.test")
+    }));
+}

@@ -38,6 +38,16 @@ fn generate_with_custom_hostname() {
 }
 
 #[test]
+fn generate_accepts_hyphenated_key_type() {
+    let context = TestContext::new();
+
+    context.cli().args(["generate", "security-key.test", "-t", "ed25519-sk"]).assert().success();
+
+    assert!(context.private_key("ed25519-sk", "security-key.test").exists());
+    assert!(context.public_key("ed25519-sk", "security-key.test").exists());
+}
+
+#[test]
 fn generate_rejects_host_colliding_with_reserved_key_name() {
     let context = TestContext::new();
 

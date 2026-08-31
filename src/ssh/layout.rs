@@ -77,6 +77,12 @@ impl Layout {
         if value == "none" || value.contains('%') || value.contains('$') {
             return Err(AppError::validation(format!("unsupported IdentityFile value '{value}'")));
         }
+        if Path::new(value).components().any(|component| matches!(component, Component::ParentDir))
+        {
+            return Err(AppError::validation(format!(
+                "IdentityFile value '{value}' contains a parent-directory component"
+            )));
+        }
 
         let candidate = if let Some(relative) = value.strip_prefix("~/") {
             self.home.join(relative)
@@ -187,5 +193,11 @@ mod tests {
     fn identity_resolution_rejects_paths_outside_root() {
         let layout = Layout::from_home(PathBuf::from("/home/test"));
         assert!(layout.resolve_identity("/outside/key").is_err());
+    }
+
+    #[test]
+    fn identity_resolution_rejects_parent_directory_components() {
+        let layout = Layout::from_home(PathBuf::from("/home/test"));
+        assert!(layout.resolve_identity("~/.ssh/link/../id_ed25519_example.test").is_err());
     }
 }
