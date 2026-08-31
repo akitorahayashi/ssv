@@ -2,6 +2,7 @@
 name = "ssv"
 version = "0.6.0"
 edition = "2024"
+rust-version = "1.90.0"
 description = "CLI that manages SSH key pairs and per-host configuration files under ~/.ssh/conf.d"
 readme = "README.md"
 repository = "https://github.com/akitorahayashi/ssv"

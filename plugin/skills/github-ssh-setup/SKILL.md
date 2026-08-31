@@ -1,6 +1,7 @@
 ---
 name: github-ssh-setup
-description: ユーザーが ssv を使って GitHub への SSH 接続用ホストを作成したい、鍵ペアを生成したい、または公開鍵を登録したいと求めた場合に使用する。
+description: ssv を使って GitHub SSH ホストを作成し、公開鍵登録と接続確認を案内する。
+compatibility: ssv、ssh、および GitHub へのネットワーク接続が必要
 disable-model-invocation: true
 argument-hint: <HOST>
 ---
@@ -26,7 +27,7 @@ argument-hint: <HOST>
 ssv init
 ```
 
-期待される出力: `SSH bootstrap is already up-to-date`（冪等）
+出力は作成、修復、または準備済みの状態を示す。再実行は同じレイアウトを維持する。
 
 ### 2. 鍵ペアとホスト設定の生成
 
@@ -65,7 +66,7 @@ ssv show <HOST>
 
 ユーザーに以下を案内する。
 
-1. GitHub の **Settings → SSH and GPG keys → New SSH key** を開く。
+1. GitHub の Settings → SSH and GPG keys → New SSH key を開く。
 2. 手順 3 で提示した公開鍵を貼り付ける。
 3. 保存する。
 
@@ -81,14 +82,13 @@ ssh -T git@<HOST>
 Hi <ユーザー名>! You've successfully authenticated, but GitHub does not provide shell access.
 ```
 
-注意: GitHub の仕様上、シェルアクセスが無効なため `ssh -T` は成功時もプロセス終了ステータス `1` を返します。成功判定は終了コードではなく、標準出力に `Hi <ユーザー名>! You've successfully authenticated` が含まれているかで判断します。出力内に認証成功メッセージがない場合のみ `ssv audit` を実行します。
-
+注意: GitHub の仕様上、シェルアクセスが無効なため `ssh -T` は成功時もプロセス終了ステータス `1` を返します。成功判定は終了コードではなく、SSH の出力に `Hi <ユーザー名>! You've successfully authenticated` が含まれているかで判断します。認証成功メッセージがない場合のみ `ssv audit` を実行します。
 
 ## 障害対応
 
 | 症状 | 対応 |
 |---|---|
-| `ssv generate` でホストが既に存在すると報告される | `ssv show <HOST>` で既存鍵を表示し `ssh -T` で接続検証する。設定変更は `ssv set` を使用し、鍵ローテーション要求時のみユーザー確認後に `ssv remove` して再生成する |
+| `ssv generate` でホストが既に存在すると報告される | `ssv audit` で既存状態を確認する。正常であれば `ssv show <HOST>` と `ssh -T` で検証し、設定変更は `ssv set` を使用する。鍵ローテーション要求時のみユーザー確認後に `ssv remove` して再生成する |
 | `ssh -T` で `Permission denied` が返る | 公開鍵が GitHub に登録されているか確認する。`ssv show <HOST>` で鍵を再表示して照合する |
-| `ssv audit` で不整合が報告される | 設定不整合は `ssv set` で修正し、鍵ペア欠損・破損時のみユーザー確認後に `ssv remove` 経由で再生成する |
+| `ssv audit` で不整合が報告される | 有効な管理設定の接続値は `ssv set` で修正する。必須フィールドが壊れた設定は信頼できるバックアップから正規形を復元する。鍵ペア欠損・破損時は設定復元後、ユーザー確認を得て `ssv remove` と再生成を行う |
 | `ssv init` が失敗する | `~/.ssh` のパーミッションを確認する。`700` でなければならない |

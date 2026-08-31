@@ -1,6 +1,7 @@
 ---
 name: ip-ssh-setup
-description: ユーザーが IPアドレス とユーザー名を渡して、次回から ssh <ユーザー名> で接続できるよう ssv でホストを登録したいと求めた場合に使用する。
+description: ssv を使って IP アドレスとユーザー名から直接 SSH 接続できる管理ホストを作成する。
+compatibility: ssv、ssh、および接続先へのネットワーク接続が必要
 disable-model-invocation: true
 argument-hint: <IP> <USERNAME>
 ---
@@ -53,12 +54,11 @@ ssh <USERNAME>
 
 接続できれば完了。
 
-
 ## 障害対応
 
 | 症状 | 対応 |
 |---|---|
 | `ssv authorize` で接続拒否される | IP が正しく、到達可能か確認する |
 | `ssh <USERNAME>` で `Permission denied` | `ssv authorize <USERNAME>` を再実行する |
-| `ssv generate` でホストが既に存在する | `ssv show <USERNAME>` で既存鍵を表示し接続確認する。IP/ユーザー変更時は `ssv set` を使用し、明示的な鍵更新時のみユーザー確認後に `ssv remove` して再生成する |
-| `ssv audit` で不整合が報告される | 設定の修正は `ssv set` を使用し、鍵ペアの不整合・欠損時のみユーザー確認後に `ssv remove` 経由で再生成する |
+| `ssv generate` でホストが既に存在する | `ssv audit` で既存状態を確認する。正常であれば `ssv show <USERNAME>` で鍵を確認する。IP/ユーザー変更時は `ssv set` を使用し、明示的な鍵更新時のみユーザー確認後に `ssv remove` して再生成する |
+| `ssv audit` で不整合が報告される | 有効な管理設定の接続値は `ssv set` で修正する。必須フィールドが壊れた設定は信頼できるバックアップから正規形を復元する。鍵ペア不整合・欠損時は設定復元後、ユーザー確認を得て `ssv remove` と再生成を行う |
